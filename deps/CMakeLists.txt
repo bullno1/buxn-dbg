@@ -1,0 +1,5 @@
+include(bio/deps/CMakeLists.txt)
+SET(BUILD_DEPS OFF CACHE BOOL "bio should not build deps")
+SET(BUILD_SAMPLES OFF CACHE BOOL "bio should not build samples")
+SET(BUILD_TESTS OFF CACHE BOOL "bio should not build tests")
+add_subdirectory(bio)
