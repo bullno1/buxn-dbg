@@ -5,7 +5,7 @@
 BUXN_DBG_CMD(
 	help,
 	"Show how to use a command",
-	"<command>"
+	"<command>\n"
 ) {
 	if (argc != 2) {
 		print_cmd_usage(self);

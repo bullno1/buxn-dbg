@@ -1,7 +1,13 @@
 set(SOURCES
 	"main.c"
 	"cmd.c"
+	"common.c"
 	"cmd_help.c"
+	"cmd_server.c"
+	"server/server.c"
+	"server/client.c"
+	"server/vm.c"
+	"libs.c"
 )
 add_executable(buxn-dbg ${SOURCES})
 target_link_libraries(
