@@ -215,6 +215,8 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 			.dbg_in = vm_bserial_in,
 			.dbg_out = vm_bserial_out,
 			.controller = &vm_controller,
+			.vm_conn_file = vm_conn_file,
+			.vm_conn_socket = vm_conn_socket,
 		});
 	}
 
@@ -225,8 +227,20 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 			break;
 		}
 
-		/*switch (msg.type) {*/
-		/*}*/
+		switch (msg.type) {
+			case SERVER_MSG_VM_NOTIFICATION:
+				break;
+			case SERVER_MSG_VM_DISCONNECTED:
+				BIO_WARN("VM disconnected, terminating");
+				should_run = false;
+				break;
+			case SERVER_MSG_NEW_CLIENT:
+				break;
+			case SERVER_MSG_CLIENT_TERMINATED:
+				break;
+			case SERVER_MSG_CLIENT_REQUEST:
+				break;
+		}
 	}
 	bio_close_mailbox(mailbox);
 
@@ -236,9 +250,11 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 	// Stop acceptor
 	acceptor_ctx.should_terminate = true;
 	bio_net_close(acceptor_ctx.socket, NULL);
-	bio_signal_t term_signal = bio_make_signal();
-	bio_monitor(acceptor_coro, term_signal);
-	bio_wait_for_signals(&term_signal, 1, true);
+	bio_join(acceptor_coro);
+
+	// Release resources
+	buxn_dbg_free(bserial_mem_out);
+	buxn_dbg_free(bserial_mem_in);
 
 	return 0;
 }
