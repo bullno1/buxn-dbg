@@ -72,6 +72,11 @@ typedef struct {
 	bio_socket_t socket;
 } bserial_socket_io_t;
 
+typedef struct {
+	bserial_ctx_t* in;
+	bserial_ctx_t* out;
+} bserial_io_t;
+
 void*
 buxn_dbg_realloc(void* ptr, size_t size);
 
@@ -94,10 +99,30 @@ void
 bserial_socket_io_init(bserial_socket_io_t* io, bio_socket_t socket);
 
 bserial_status_t
-buxn_dbgx_protocol_msg(
+buxn_dbgx_protocol_msg_header(bserial_ctx_t* ctx, buxn_dbgx_msg_t* msg);
+
+bserial_status_t
+buxn_dbgx_protocol_msg_body(
 	bserial_ctx_t* ctx,
 	buxn_dbg_msg_buffer_t buffer,
 	buxn_dbgx_msg_t* msg
 );
+
+static inline bserial_status_t
+buxn_dbgx_protocol_msg(
+	bserial_ctx_t* ctx,
+	buxn_dbg_msg_buffer_t buffer,
+	buxn_dbgx_msg_t* msg
+) {
+	BSERIAL_CHECK_STATUS(buxn_dbgx_protocol_msg_header(ctx, msg));
+	BSERIAL_CHECK_STATUS(buxn_dbgx_protocol_msg_body(ctx, buffer, msg));
+	return BSERIAL_OK;
+}
+
+bserial_io_t*
+buxn_dbg_make_bserial_io_from_socket(bio_socket_t socket);
+
+void
+buxn_dbg_destroy_bserial_io(bserial_io_t* io);
 
 #endif

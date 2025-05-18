@@ -1,7 +1,7 @@
 #include "client.h"
-#include <bserial.h>
+#include "../common.h"
 
-static const bio_tag_t BUXN_CLIENT_DATA = BIO_TAG_INIT("buxn.client.data");
+static const bio_tag_t BUXN_CLIENT_DATA = BIO_TAG_INIT("buxn.server.client.data");
 
 typedef enum {
 	CLIENT_MSG_READER_TERMINATED,
@@ -9,8 +9,9 @@ typedef enum {
 } msg_type_t;
 
 struct buxn_dbg_client_handler_msg_s {
-	msg_type_t type;
+	BIO_SERVICE_MSG
 
+	msg_type_t type;
 	buxn_dbgx_msg_t msg;
 };
 
@@ -30,8 +31,8 @@ reader_entry(void* userdata) {
 
 	while (!ctx->should_terminate) {
 		buxn_dbgx_msg_t msg;
-		if (!buxn_dbgx_protocol_msg(ctx->bserial_in, msg_buf, &msg)) {
-			if (bio_is_mailbox_open(ctx->service_mailbox) && !ctx->should_terminate) {
+		if (buxn_dbgx_protocol_msg(ctx->bserial_in, msg_buf, &msg) != BSERIAL_OK) {
+			if (!ctx->should_terminate) {
 				BIO_ERROR("Error while reading message from client");
 			}
 			break;
@@ -57,21 +58,12 @@ handler_entry(void* userdata) {
 	bio_get_service_info(userdata, &mailbox, &args);
 	bio_set_coro_data(&args, &BUXN_CLIENT_DATA);
 
-	bserial_ctx_config_t bserial_cfg = {
-		.max_num_symbols = 16,
-		.max_record_fields = 8,
-		.max_symbol_len = 16,
-		.max_depth = 4,
-	};
-	size_t bserial_mem_size = bserial_ctx_mem_size(bserial_cfg);
-	void* bserial_mem_in = buxn_dbg_malloc(bserial_mem_size);
-	void* bserial_mem_out = buxn_dbg_malloc(bserial_mem_size);
-	bserial_ctx_t* bserial_in = bserial_make_ctx(bserial_mem_in, bserial_cfg, &args.io.in, NULL);
-	bserial_ctx_t* bserial_out = bserial_make_ctx(bserial_mem_out, bserial_cfg, NULL, &args.io.out);
+	bserial_io_t* io = buxn_dbg_make_bserial_io_from_socket(args.socket);
 
 	reader_ctx_t reader_ctx = {
-		.bserial_in = bserial_in,
+		.bserial_in = io->in,
 		.service_mailbox = mailbox,
+		.controller = args.controller,
 	};
 	bio_coro_t reader_coro = bio_spawn(reader_entry, &reader_ctx);
 
@@ -80,22 +72,22 @@ handler_entry(void* userdata) {
 			case CLIENT_MSG_READER_TERMINATED:
 				goto end;
 			case CLIENT_MSG_SEND:
-				if (!buxn_dbgx_protocol_msg(bserial_out, NULL, &msg.msg)) {
+				if (buxn_dbgx_protocol_msg(io->out, NULL, &msg.msg) != BSERIAL_OK) {
 					if (bio_is_mailbox_open(mailbox)) {
 						BIO_ERROR("Error while sending message to client");
 					}
 					break;
 				}
+				bio_respond(msg) { }
 				break;
 		}
 	}
 end:
-	bio_net_close(args.io.socket, NULL);
+	bio_net_close(args.socket, NULL);
 	reader_ctx.should_terminate = true;
 	bio_join(reader_coro);
 
-	buxn_dbg_free(bserial_mem_out);
-	buxn_dbg_free(bserial_mem_in);
+	buxn_dbg_destroy_bserial_io(io);
 
 	buxn_dbg_client_terminated(args.controller);
 }
@@ -111,16 +103,26 @@ void
 buxn_dbg_stop_client_handler(buxn_dbg_client_handler_t client) {
 	buxn_dbg_client_args_t* args = bio_get_coro_data(client.coro, &BUXN_CLIENT_DATA);
 	if (args != NULL) {
-		bio_net_close(args->io.socket, NULL);
+		bio_net_close(args->socket, NULL);
 		bio_stop_service(client);
 	}
 }
 
 bool
-buxn_dbg_notify_client(buxn_dbg_client_handler_t client, buxn_dbgx_msg_t msg) {
+buxn_dbg_notify_client_async(buxn_dbg_client_handler_t client, buxn_dbgx_msg_t msg) {
 	buxn_dbg_client_handler_msg_t msg_to_client = {
 		.type = CLIENT_MSG_SEND,
 		.msg = msg,
 	};
 	return bio_send_message(client.mailbox, msg_to_client);
+}
+
+void
+buxn_dbg_notify_client_sync(buxn_dbg_client_handler_t client, buxn_dbgx_msg_t msg) {
+	buxn_dbg_client_handler_msg_t msg_to_client = {
+		.type = CLIENT_MSG_SEND,
+		.msg = msg,
+	};
+	bio_signal_t cancel_signal = { 0 };
+	bio_call_service(client, msg_to_client, cancel_signal);
 }

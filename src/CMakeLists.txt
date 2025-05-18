@@ -4,9 +4,11 @@ set(SOURCES
 	"common.c"
 	"cmd_help.c"
 	"cmd_server.c"
+	"cmd_info.c"
 	"server/server.c"
 	"server/client.c"
 	"server/vm.c"
+	"client.c"
 	"libs.c"
 )
 add_executable(buxn-dbg ${SOURCES})

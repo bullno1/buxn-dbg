@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "common.h"
 #include <bio/bio.h>
+#include <mem_layout.h>
 #include <bio/logging/file.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -228,13 +229,23 @@ bserial_file_io_init(bserial_file_io_t* io, bio_file_t file) {
 static size_t
 bio_socket_read(struct bserial_in_s* in, void* buf, size_t size) {
 	bserial_socket_io_t* io = BUXN_CONTAINER_OF(in, bserial_socket_io_t, in);
-	return bio_net_recv(io->socket, buf, size, NULL);
+	bio_error_t error = { 0 };
+	size_t result = bio_net_recv(io->socket, buf, size, &error);
+	if (bio_has_error(&error)) {
+		BIO_ERROR(BIO_ERROR_FMT, BIO_ERROR_FMT_ARGS(&error));
+	}
+	return result;
 }
 
 static size_t
 bio_socket_write(struct bserial_out_s* out, const void* buf, size_t size) {
 	bserial_socket_io_t* io = BUXN_CONTAINER_OF(out, bserial_socket_io_t, out);
-	return bio_net_send(io->socket, buf, size, NULL);
+	bio_error_t error = { 0 };
+	size_t result = bio_net_send(io->socket, buf, size, &error);
+	if (bio_has_error(&error)) {
+		BIO_ERROR(BIO_ERROR_FMT, BIO_ERROR_FMT_ARGS(&error));
+	}
+	return result;
 }
 
 void
@@ -246,15 +257,20 @@ bserial_socket_io_init(bserial_socket_io_t* io, bio_socket_t socket) {
 }
 
 bserial_status_t
-buxn_dbgx_protocol_msg(
+buxn_dbgx_protocol_msg_header(bserial_ctx_t* ctx, buxn_dbgx_msg_t* msg) {
+	uint8_t type = msg->type;
+	BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &type));
+	msg->type = type;
+	return BSERIAL_OK;
+}
+
+bserial_status_t
+buxn_dbgx_protocol_msg_body(
 	bserial_ctx_t* ctx,
 	buxn_dbg_msg_buffer_t buffer,
 	buxn_dbgx_msg_t* msg
 ) {
 	uint8_t type = msg->type;
-	BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &type));
-	msg->type = type;
-
 	switch ((buxn_dbgx_msg_type_t)type) {
 		case BUXN_DBGX_MSG_CORE:
 			BSERIAL_CHECK_STATUS(buxn_dbg_protocol_msg(ctx, buffer, &msg->core));
@@ -307,4 +323,46 @@ buxn_dbgx_protocol_msg(
 	}
 
 	return BSERIAL_OK;
+}
+
+bserial_io_t*
+buxn_dbg_make_bserial_io_from_socket(bio_socket_t socket) {
+	bserial_ctx_config_t bserial_cfg = {
+		.max_num_symbols = 16,
+		.max_record_fields = 8,
+		.max_symbol_len = 16,
+		.max_depth = 4,
+	};
+	size_t bserial_mem_size = bserial_ctx_mem_size(bserial_cfg);
+
+	// Allocate everything in one block
+	mem_layout_t layout = { 0 };
+	mem_layout_reserve(&layout, sizeof(bserial_io_t), _Alignof(bserial_io_t));
+	ptrdiff_t socket_io_offset = mem_layout_reserve(&layout, sizeof(bserial_socket_io_t), _Alignof(bserial_socket_io_t));
+	ptrdiff_t mem_in_offset = mem_layout_reserve(&layout, bserial_mem_size, _Alignof(max_align_t));
+	ptrdiff_t mem_out_offset = mem_layout_reserve(&layout, bserial_mem_size, _Alignof(max_align_t));
+	size_t total_size = mem_layout_size(&layout);
+	void* mem = buxn_dbg_malloc(total_size);
+	bserial_io_t* bserial_io = mem;
+	bserial_socket_io_t* socket_io = mem_layout_locate(mem, socket_io_offset);
+	bserial_socket_io_init(socket_io, socket);
+	bserial_io->in = bserial_make_ctx(
+		mem_layout_locate(mem, mem_in_offset),
+		bserial_cfg,
+		&socket_io->in,
+		NULL
+	);
+	bserial_io->out = bserial_make_ctx(
+		mem_layout_locate(mem, mem_out_offset),
+		bserial_cfg,
+		NULL,
+		&socket_io->out
+	);
+
+	return bserial_io;
+}
+
+void
+buxn_dbg_destroy_bserial_io(bserial_io_t* io) {
+	buxn_dbg_free(io);
 }

@@ -52,12 +52,18 @@ reader_entry(void* userdata) {
 	while (!ctx->should_terminate) {
 		buxn_dbg_msg_t vm_msg;
 		if (buxn_dbg_protocol_msg_header(ctx->dbg_in, &vm_msg) != BSERIAL_OK) {
+			if (!ctx->should_terminate) {
+				BIO_ERROR("Error while reading message header");
+			}
 			break;
 		}
 
 		if (vm_msg.type == BUXN_DBG_MSG_COMMAND_REP) {
 			vm_msg.cmd = ctx->pending_cmd;
 			if (buxn_dbg_protocol_msg_body(ctx->dbg_in, NULL, &vm_msg) != BSERIAL_OK) {
+				if (!ctx->should_terminate) {
+					BIO_ERROR("Error while reading message body");
+				}
 				break;
 			}
 			bio_wait_and_send_message(
@@ -67,6 +73,9 @@ reader_entry(void* userdata) {
 			);
 		} else {
 			if (buxn_dbg_protocol_msg_body(ctx->dbg_in, NULL, &vm_msg) != BSERIAL_OK) {
+				if (!ctx->should_terminate) {
+					BIO_ERROR("Error while reading message body");
+				}
 				break;
 			}
 			buxn_dbg_vm_notify(ctx->controller, vm_msg);
@@ -112,7 +121,7 @@ service_entry(void* userdata) {
 			.type = BUXN_DBG_MSG_COMMAND_REQ,
 			.cmd = cmd,
 		};
-		if (!buxn_dbg_protocol_msg(args.dbg_out, NULL, &msg_to_vm)) {
+		if (buxn_dbg_protocol_msg(args.dbg_out, NULL, &msg_to_vm) != BSERIAL_OK) {
 			if (bio_is_mailbox_open(service_mailbox)) {
 				BIO_ERROR("Error while sending message to VM");
 			}
