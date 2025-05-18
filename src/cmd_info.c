@@ -12,29 +12,14 @@ static int
 bio_main(void* userdata) {
 	args_t* args = userdata;
 
-	bio_error_t error;
-	BIO_DEBUG("Connecting to debug server");
-	bio_socket_t sock;
-	if (!bio_net_connect(
-		BIO_SOCKET_STREAM,
-		&args->connect_transport.net.addr,
-		args->connect_transport.net.port,
-		&sock,
-		&error
-	)) {
-		BIO_ERROR(
-			"Error while connecting: (" BIO_ERROR_FMT ")",
-			BIO_ERROR_FMT_ARGS(&error)
-		);
+	buxn_dbg_client_t client;
+	if (!buxn_dbg_make_client(&client, &args->connect_transport)) {
 		return 1;
 	}
-	BIO_DEBUG("Connected to debug server");
-
-	buxn_dbg_client_t client = buxn_dbg_start_client(&(buxn_dbg_client_args_t){
-		.socket = sock,
-	});
 
 	uint16_t pc;
+	buxn_dbg_stack_info_t wst;
+	buxn_dbg_stack_info_t rst;
 	bio_call_status_t status;
 	status = buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
 		.type = BUXN_DBG_CMD_INFO,
@@ -44,11 +29,30 @@ bio_main(void* userdata) {
 		}
 	});
 	if (status != BIO_CALL_OK) { goto end; }
-	BIO_INFO("pc = 0x%04x", pc);
 
+	status = buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
+		.type = BUXN_DBG_CMD_INFO,
+		.info = {
+			.type = BUXN_DBG_INFO_WST,
+			.stack = &wst,
+		}
+	});
+	if (status != BIO_CALL_OK) { goto end; }
+
+	status = buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
+		.type = BUXN_DBG_CMD_INFO,
+		.info = {
+			.type = BUXN_DBG_INFO_RST,
+			.stack = &rst,
+		}
+	});
+	if (status != BIO_CALL_OK) { goto end; }
+
+	BIO_INFO("pc = 0x%04x", pc);
+	BIO_INFO("System/wst = %d", wst.pointer);
+	BIO_INFO("System/rst = %d", rst.pointer);
 end:
 	buxn_dbg_stop_client(client);
-	bio_net_close(sock, NULL);
 	return 0;
 }
 
@@ -57,13 +61,7 @@ BUXN_DBG_CMD(
 	"Show information about the current state",
 	"[flags]\n\n"
 	"Available flags:\n\n"
-	"* -connect=<transport>: How to connect to the debug server.\n"
-	"  Available transports:\n\n"
-	"  * tcp-connect:<address>:<port>: Connect to an address\n"
-	"  * unix-connect:<name>: Connect to a unix domain socket\n"
-	"  * abstract-connect:<name>: Connect to an abstract socket\n"
-	"\n"
-	"  Default value: abstract-connect:buxn/dbg\n"
+	CONNECT_FLAG_HELP
 ) {
 	bool connect_set = false;
 	args_t args;

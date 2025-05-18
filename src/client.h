@@ -1,12 +1,13 @@
 #ifndef BUXN_DBG_CLIENT_H
 #define BUXN_DBG_CLIENT_H
 
-#include "common.h"
 #include <bio/service.h>
 #include <bio/net.h>
+#include "protocol.h"
 
 typedef struct buxn_dbg_client_msg_s buxn_dbg_client_msg_t;
 typedef BIO_SERVICE(buxn_dbg_client_msg_t) buxn_dbg_client_t;
+struct buxn_dbg_transport_info_s;
 
 typedef struct {
 	bio_socket_t socket;
@@ -33,5 +34,11 @@ buxn_dbg_client_send_dbg_cmd(buxn_dbg_client_t client, buxn_dbg_cmd_t cmd) {
 		},
 	});
 }
+
+bool
+buxn_dbg_make_client(
+	buxn_dbg_client_t* client,
+	const struct buxn_dbg_transport_info_s* transport
+);
 
 #endif

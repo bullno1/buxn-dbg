@@ -1,5 +1,6 @@
 #include "client.h"
 #include "../common.h"
+#include "../protocol.h"
 
 static const bio_tag_t BUXN_CLIENT_DATA = BIO_TAG_INIT("buxn.server.client.data");
 

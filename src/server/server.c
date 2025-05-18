@@ -1,6 +1,7 @@
 #include "server.h"
 #include "client.h"
 #include "vm.h"
+#include "../protocol.h"
 #include <bio/mailbox.h>
 
 #define MAX_CLIENTS 32

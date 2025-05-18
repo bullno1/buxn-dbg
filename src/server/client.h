@@ -1,8 +1,9 @@
 #ifndef BUXN_DBG_SERVER_CLIENT_HANDLER_H
 #define BUXN_DBG_SERVER_CLIENT_HANDLER_H
 
-#include "../common.h"
 #include <bio/service.h>
+#include <bio/net.h>
+#include "../protocol.h"
 
 typedef struct buxn_dbg_client_handler_msg_s buxn_dbg_client_handler_msg_t;
 typedef BIO_SERVICE(buxn_dbg_client_handler_msg_t) buxn_dbg_client_handler_t;

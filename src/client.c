@@ -1,6 +1,7 @@
 #include "client.h"
 #include <barray.h>
 #include <string.h>
+#include "common.h"
 
 static const bio_tag_t BUXN_CLIENT_DATA = BIO_TAG_INIT("buxn.client.data");
 
@@ -161,4 +162,28 @@ buxn_dbg_client_send(buxn_dbg_client_t client, buxn_dbgx_msg_t msg) {
 		bio_notify_service(client, msg_to_service, true);
 		return BIO_CALL_OK;
 	}
+}
+
+bool
+buxn_dbg_make_client(buxn_dbg_client_t* client, const buxn_dbg_transport_info_t* transport) {
+	bio_error_t error;
+	bio_socket_t sock;
+	if (!bio_net_connect(
+		BIO_SOCKET_STREAM,
+		&transport->net.addr,
+		transport->net.port,
+		&sock,
+		&error
+	)) {
+		BIO_ERROR(
+			"Error while connecting: (" BIO_ERROR_FMT ")",
+			BIO_ERROR_FMT_ARGS(&error)
+		);
+		return false;
+	}
+
+	*client = buxn_dbg_start_client(&(buxn_dbg_client_args_t){
+		.socket = sock,
+	});
+	return true;
 }
