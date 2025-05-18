@@ -5,12 +5,11 @@
 
 #define CONNECT_FLAG_HELP \
 	"* -connect=<transport>: How to connect to the debug server.\n" \
+	"  Default value: abstract-connect:buxn/dbg\n" \
 	"  Available transports:\n\n" \
 	"  * tcp-connect:<address>:<port>: Connect to an address\n" \
 	"  * unix-connect:<name>: Connect to a unix domain socket\n" \
 	"  * abstract-connect:<name>: Connect to an abstract socket\n" \
-	"\n" \
-	"  Default value: abstract-connect:buxn/dbg\n\n"
 
 typedef struct buxn_dbg_cmd_entry_s buxn_dbg_cmd_entry_t;
 

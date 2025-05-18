@@ -20,7 +20,7 @@ typedef struct {
 bool
 buxn_dbg_parse_transport(const char* str, buxn_dbg_transport_info_t* info) {
 	const char* arg;
-	if        ((arg = parse_flag(str, "fifo:")) != NULL) {
+	if        ((arg = parse_flag(str, "file:")) != NULL) {
 		*info = (buxn_dbg_transport_info_t){
 			.type = BUXN_DBG_TRANSPORT_FILE,
 			.file = arg,

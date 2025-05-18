@@ -40,6 +40,7 @@ BUXN_DBG_CMD(
 	"Available flags:\n\n"
 	CONNECT_FLAG_HELP
 	"* -level=<level>: Log level.\n"
+	"  Default level: info\n"
 	"  Valid levels:\n\n"
 	"  * trace\n"
 	"  * debug\n"
@@ -47,7 +48,6 @@ BUXN_DBG_CMD(
 	"  * warn\n"
 	"  * error\n"
 	"  * fatal\n"
-	"\n  Default level: 'info'\n"
 ) {
 	bool connect_set = false;
 	bool level_set = false;
