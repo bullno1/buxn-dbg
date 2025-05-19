@@ -61,6 +61,9 @@ int
 bio_enter(bio_entry_fn_t entry, void* userdata);
 
 void
+buxn_dbg_set_logger(bio_logger_t logger);
+
+void
 bserial_file_io_init(bserial_file_io_t* io, bio_file_t file);
 
 void

@@ -2,6 +2,7 @@
 #include "cmd.h"
 #include "client.h"
 #include "common.h"
+#include "logger.h"
 #include <stdio.h>
 
 typedef struct {
@@ -19,15 +20,8 @@ bio_main(void* userdata) {
 		return 1;
 	}
 
-	buxn_dbg_client_send(client, (buxn_dbgx_msg_t){
-		.type = BUXN_DBGX_MSG_LOG,
-		.log = {
-			.file = __FILE__,
-			.line = __LINE__,
-			.level = args->log_level,
-			.msg = args->log_msg,
-		},
-	});
+	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, client));
+	BIO_LOG(args->log_level, "%s", args->log_msg);
 
 	buxn_dbg_stop_client(client);
 	return 0;

@@ -17,6 +17,8 @@ typedef struct {
 	int exit_code;
 } bio_entry_data_t;
 
+static bio_logger_t buxn_main_logger = { 0 };
+
 bool
 buxn_dbg_parse_transport(const char* str, buxn_dbg_transport_info_t* info) {
 	const char* arg;
@@ -139,7 +141,7 @@ static void
 bio_entry_wrapper(void* userdata) {
 	bio_entry_data_t* entry_data = userdata;
 
-	bio_logger_t logger = bio_add_file_logger(
+	buxn_main_logger = bio_add_file_logger(
 		BIO_LOG_LEVEL_TRACE,
 		&(bio_file_logger_options_t){
 			.file = BIO_STDERR,
@@ -149,7 +151,7 @@ bio_entry_wrapper(void* userdata) {
 
 	entry_data->exit_code = entry_data->entry(entry_data->userdata);
 
-	bio_remove_logger(logger);
+	bio_remove_logger(buxn_main_logger);
 }
 
 // TODO: switch allocator
@@ -200,6 +202,12 @@ bio_enter(bio_entry_fn_t entry, void* userdata) {
 	bio_terminate();
 
 	return entry_data.exit_code;
+}
+
+void
+buxn_dbg_set_logger(bio_logger_t logger) {
+	bio_remove_logger(buxn_main_logger);
+	buxn_main_logger = logger;
 }
 
 static size_t

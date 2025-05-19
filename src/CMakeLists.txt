@@ -11,6 +11,7 @@ set(SOURCES
 	"server/client.c"
 	"server/vm.c"
 	"client.c"
+	"logger.c"
 	"libs.c"
 )
 add_executable(buxn-dbg ${SOURCES})
