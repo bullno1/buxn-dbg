@@ -13,7 +13,7 @@ typedef enum {
 typedef enum {
 	BUXN_DBGP_FOCUS_HOVER    = 0,
 	BUXN_DBGP_FOCUS_CURRENT  = 1,
-} buxn_dbgp_focus_type_t;
+} buxn_dbgx_focus_type_t;
 
 typedef struct {
 	buxn_dbgx_msg_type_t type;
@@ -21,7 +21,7 @@ typedef struct {
 		buxn_dbg_msg_t core;
 
 		struct {
-			buxn_dbgp_focus_type_t type;
+			buxn_dbgx_focus_type_t type;
 			uint16_t address;
 		} focus;
 

@@ -62,6 +62,8 @@ typedef struct {
 
 static void
 acceptor(void* userdata) {
+	bio_set_coro_name("server/acceptor");
+
 	acceptor_ctx_t* ctx = userdata;
 
 	bio_error_t error;
@@ -83,6 +85,7 @@ acceptor(void* userdata) {
 
 int
 buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
+	bio_set_coro_name("server");
 	buxn_dbg_server_args_t* args = userdata;
 
 	// Connect to VM
@@ -278,6 +281,7 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 
 				if (controller != NULL) {
 					buxn_dbg_client_args_t client_args = {
+						.id = controller->id,
 						.controller = controller,
 						.socket = msg.new_client.socket,
 					};
@@ -360,10 +364,7 @@ buxn_dbg_client_request(buxn_dbg_client_controller_t* controller, buxn_dbgx_msg_
 			buxn_dbg_stop_client_handler(controller->client);
 		}
 	} else if (msg.type == BUXN_DBGX_MSG_LOG) {
-		bio_log(
-			msg.log.level, msg.log.file, msg.log.line,
-			"Client %d: %s", controller->id, msg.log.msg
-		);
+		bio_log(msg.log.level, msg.log.file, msg.log.line, "%s", msg.log.msg);
 	} else {
 		server_msg_t msg_to_server = {
 			.type = SERVER_MSG_CLIENT_REQUEST,

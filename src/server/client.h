@@ -10,6 +10,7 @@ typedef BIO_SERVICE(buxn_dbg_client_handler_msg_t) buxn_dbg_client_handler_t;
 typedef struct buxn_dbg_client_controller_s buxn_dbg_client_controller_t;
 
 typedef struct {
+	int id;
 	bio_socket_t socket;
 	buxn_dbg_client_controller_t* controller;
 } buxn_dbg_client_args_t;

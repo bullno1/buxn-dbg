@@ -1,6 +1,7 @@
 #include "client.h"
 #include "../common.h"
 #include "../protocol.h"
+#include <stdio.h>
 
 static const bio_tag_t BUXN_CLIENT_DATA = BIO_TAG_INIT("buxn.server.client.data");
 
@@ -19,6 +20,7 @@ struct buxn_dbg_client_handler_msg_s {
 typedef BIO_MAILBOX(buxn_dbg_client_handler_msg_t) mailbox_t;
 
 typedef struct {
+	int id;
 	bserial_ctx_t* bserial_in;
 	buxn_dbg_client_controller_t* controller;
 	mailbox_t service_mailbox;
@@ -28,6 +30,10 @@ typedef struct {
 static void
 reader_entry(void* userdata) {
 	reader_ctx_t* ctx = userdata;
+	char name_buf[sizeof("client:2147483647/reader")];
+	snprintf(name_buf, sizeof(name_buf), "client:%d/reader", ctx->id);
+	bio_set_coro_name(name_buf);
+
 	buxn_dbg_msg_buffer_t msg_buf;
 
 	while (!ctx->should_terminate) {
@@ -58,10 +64,14 @@ handler_entry(void* userdata) {
 	mailbox_t mailbox;
 	bio_get_service_info(userdata, &mailbox, &args);
 	bio_set_coro_data(&args, &BUXN_CLIENT_DATA);
+	char name_buf[sizeof("client:2147483647")];
+	snprintf(name_buf, sizeof(name_buf), "client:%d", args.id);
+	bio_set_coro_name(name_buf);
 
 	bserial_io_t* io = buxn_dbg_make_bserial_io_from_socket(args.socket);
 
 	reader_ctx_t reader_ctx = {
+		.id = args.id,
 		.bserial_in = io->in,
 		.service_mailbox = mailbox,
 		.controller = args.controller,

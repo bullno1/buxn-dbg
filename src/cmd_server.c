@@ -26,9 +26,6 @@ BUXN_DBG_CMD(
 	"  * tcp-listen:<port>: Listen on a tcp port\n"
 	"  * unix-listen:<name>: Listen on a unix domain socket\n"
 	"  * abstract-listen:<name>: Listen on an abstract socket\n"
-	"\n"
-	"* -symbol=<path>: Which symbol file to load.\n"
-	"* -src-dir=<str>: The directory to prepend to source path found in the symbol file.\n"
 ) {
 	buxn_dbg_server_args_t args;
 	buxn_dbg_parse_transport("abstract-connect:buxn/vm", &args.connect_transport);

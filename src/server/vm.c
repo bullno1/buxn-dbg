@@ -46,6 +46,7 @@ terminate_wait_points(const wait_points_t* wait_points) {
 
 static void
 reader_entry(void* userdata) {
+	bio_set_coro_name("vm/reader");
 	BIO_DEBUG("VM reader started");
 	reader_ctx_t* ctx = userdata;
 
@@ -88,6 +89,7 @@ reader_entry(void* userdata) {
 
 static void
 service_entry(void* userdata) {
+	bio_set_coro_name("vm");
 	BIO_DEBUG("VM service started");
 	buxn_dbg_vm_handler_args_t args;
 	service_mailbox_t service_mailbox;
