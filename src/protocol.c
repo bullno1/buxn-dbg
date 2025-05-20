@@ -18,11 +18,15 @@ buxn_dbgx_str(
 
 		uint64_t len = buf_ptr_max - *buf_ptr;
 		BSERIAL_CHECK_STATUS(bserial_blob(ctx, *buf_ptr, &len));
-		(*buf_ptr)[len] = '\0';
-		*str_ptr = *buf_ptr;
-		*buf_ptr += len + 1;
+		if (len > 0) {
+			(*buf_ptr)[len] = '\0';
+			*str_ptr = *buf_ptr;
+			*buf_ptr += len + 1;
+		} else {
+			*str_ptr = NULL;
+		}
 	} else {
-		uint64_t len = strlen(*str_ptr);
+		uint64_t len = *str_ptr != NULL ? strlen(*str_ptr) : 0;
 		BSERIAL_CHECK_STATUS(bserial_blob(ctx, (char*)*str_ptr, &len));
 	}
 
@@ -53,11 +57,7 @@ buxn_dbgx_protocol_msg_body(
 			BSERIAL_RECORD(ctx, &msg->init) {
 				BSERIAL_KEY(ctx, client_name) {
 					BSERIAL_CHECK_STATUS(
-						buxn_dbgx_str(
-							ctx,
-							&str_buf, str_buf_max,
-							&msg->init.client_name
-						)
+						buxn_dbgx_str(ctx, &str_buf, str_buf_max, &msg->init.client_name)
 					);
 				}
 			};
@@ -72,13 +72,14 @@ buxn_dbgx_protocol_msg_body(
 				BSERIAL_KEY(ctx, level) {
 					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->log.level));
 				}
+				BSERIAL_KEY(ctx, coro_name) {
+					BSERIAL_CHECK_STATUS(
+						buxn_dbgx_str(ctx, &str_buf, str_buf_max, &msg->log.coro_name)
+					);
+				}
 				BSERIAL_KEY(ctx, file) {
 					BSERIAL_CHECK_STATUS(
-						buxn_dbgx_str(
-							ctx,
-							&str_buf, str_buf_max,
-							&msg->log.file
-						)
+						buxn_dbgx_str(ctx, &str_buf, str_buf_max, &msg->log.file)
 					);
 				}
 				BSERIAL_KEY(ctx, line) {
@@ -86,11 +87,7 @@ buxn_dbgx_protocol_msg_body(
 				}
 				BSERIAL_KEY(ctx, msg) {
 					BSERIAL_CHECK_STATUS(
-						buxn_dbgx_str(
-							ctx,
-							&str_buf, str_buf_max,
-							&msg->log.msg
-						)
+						buxn_dbgx_str(ctx, &str_buf, str_buf_max, &msg->log.msg)
 					);
 				}
 			}

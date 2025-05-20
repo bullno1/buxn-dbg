@@ -37,7 +37,7 @@ reader_entry(void* userdata) {
 	buxn_dbg_msg_buffer_t msg_buf;
 
 	while (!ctx->should_terminate) {
-		buxn_dbgx_msg_t msg;
+		buxn_dbgx_msg_t msg = { 0 };
 		if (buxn_dbgx_protocol_msg(ctx->bserial_in, msg_buf, &msg) != BSERIAL_OK) {
 			if (!ctx->should_terminate) {
 				BIO_ERROR("Error while reading message from client");

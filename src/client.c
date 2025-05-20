@@ -48,7 +48,7 @@ reader_entry(void* userdata) {
 	bio_set_coro_name("client/reader");
 
 	while (!ctx->should_terminate) {
-		buxn_dbgx_msg_t server_msg;
+		buxn_dbgx_msg_t server_msg = { 0 };
 		if (buxn_dbgx_protocol_msg_header(ctx->bserial_in, &server_msg) != BSERIAL_OK) {
 			break;
 		}

@@ -47,6 +47,7 @@ static void
 bio_tb_event_poller(void* userdata) {
 	bio_tb_ctx_t* ctx = userdata;
 	bio_raise_signal(ctx->ready_sig);
+	bio_set_coro_name("bio_tb/poller");
 	BIO_DEBUG("termbox poller started");
 
 	struct tb_event event_buf[8];

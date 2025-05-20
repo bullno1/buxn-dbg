@@ -33,6 +33,7 @@ typedef struct {
 
 		struct {
 			bio_log_level_t level;
+			const char* coro_name;
 			int line;
 			const char* file;
 			const char* msg;

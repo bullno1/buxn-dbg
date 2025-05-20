@@ -16,6 +16,7 @@ buxn_dbg_log(void* userdata, const bio_log_ctx_t* ctx, const char* msg) {
 			.type = BUXN_DBGX_MSG_LOG,
 			.log = {
 				.level = ctx->level,
+				.coro_name = bio_get_coro_name(ctx->coro),
 				.file = ctx->file,
 				.line = ctx->line,
 				.msg = msg_copy,
