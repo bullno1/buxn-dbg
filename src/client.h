@@ -24,6 +24,13 @@ buxn_dbg_stop_client(buxn_dbg_client_t client);
 bio_call_status_t
 buxn_dbg_client_send(buxn_dbg_client_t client, buxn_dbgx_msg_t msg);
 
+bool
+buxn_dbg_make_client(
+	buxn_dbg_client_t* client,
+	const struct buxn_dbg_transport_info_s* transport,
+	const buxn_dbgx_init_t* init_info
+);
+
 static inline bio_call_status_t
 buxn_dbg_client_send_dbg_cmd(buxn_dbg_client_t client, buxn_dbg_cmd_t cmd) {
 	return buxn_dbg_client_send(client, (buxn_dbgx_msg_t){
@@ -34,11 +41,5 @@ buxn_dbg_client_send_dbg_cmd(buxn_dbg_client_t client, buxn_dbg_cmd_t cmd) {
 		},
 	});
 }
-
-bool
-buxn_dbg_make_client(
-	buxn_dbg_client_t* client,
-	const struct buxn_dbg_transport_info_s* transport
-);
 
 #endif

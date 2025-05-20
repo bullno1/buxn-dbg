@@ -6,10 +6,11 @@
 
 typedef enum {
 	BUXN_DBGX_MSG_BYE         = 0,
-	BUXN_DBGX_MSG_CORE        = 1,
-	BUXN_DBGX_MSG_LOG         = 2,
-	BUXN_DBGX_MSG_INFO_REQ    = 3,
-	BUXN_DBGX_MSG_INFO_REP    = 4,
+	BUXN_DBGX_MSG_INIT        = 1,
+	BUXN_DBGX_MSG_CORE        = 2,
+	BUXN_DBGX_MSG_LOG         = 3,
+	BUXN_DBGX_MSG_INFO_REQ    = 4,
+	BUXN_DBGX_MSG_INFO_REP    = 5,
 } buxn_dbgx_msg_type_t;
 
 typedef struct {
@@ -20,8 +21,13 @@ typedef struct {
 } buxn_dbgx_info_t;
 
 typedef struct {
+	const char* client_name;
+} buxn_dbgx_init_t;
+
+typedef struct {
 	buxn_dbgx_msg_type_t type;
 	union {
+		buxn_dbgx_init_t init;
 		buxn_dbg_msg_t core;
 		buxn_dbgx_info_t* info;
 

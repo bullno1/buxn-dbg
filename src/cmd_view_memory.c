@@ -7,6 +7,8 @@
 
 typedef struct {
 	buxn_dbg_transport_info_t connect_transport;
+	const char* dbg_filename;
+	const char* src_dir;
 } args_t;
 
 typedef BIO_MAILBOX(struct tb_event) mailbox_t;
@@ -23,7 +25,11 @@ bio_main(void* userdata) {
 	args_t* args = userdata;
 
 	buxn_dbg_client_t client;
-	if (!buxn_dbg_make_client(&client, &args->connect_transport)) {
+	if (!buxn_dbg_make_client(
+		&client,
+		&args->connect_transport,
+		&(buxn_dbgx_init_t){ .client_name = "view:memory" }
+	)) {
 		return 1;
 	}
 	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, client));

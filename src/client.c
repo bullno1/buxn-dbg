@@ -178,7 +178,8 @@ buxn_dbg_client_send(buxn_dbg_client_t client, buxn_dbgx_msg_t msg) {
 		.msg = msg,
 	};
 	if (
-		msg.type == BUXN_DBGX_MSG_BYE
+		msg.type == BUXN_DBGX_MSG_INIT
+		|| msg.type == BUXN_DBGX_MSG_BYE
 		|| msg.type == BUXN_DBGX_MSG_CORE
 		|| msg.type == BUXN_DBGX_MSG_LOG
 		|| msg.type == BUXN_DBGX_MSG_INFO_REQ
@@ -192,7 +193,11 @@ buxn_dbg_client_send(buxn_dbg_client_t client, buxn_dbgx_msg_t msg) {
 }
 
 bool
-buxn_dbg_make_client(buxn_dbg_client_t* client, const buxn_dbg_transport_info_t* transport) {
+buxn_dbg_make_client(
+	buxn_dbg_client_t* client,
+	const struct buxn_dbg_transport_info_s* transport,
+	const buxn_dbgx_init_t* init_info
+) {
 	bio_error_t error;
 	bio_socket_t sock;
 	if (!bio_net_connect(
@@ -212,5 +217,16 @@ buxn_dbg_make_client(buxn_dbg_client_t* client, const buxn_dbg_transport_info_t*
 	*client = buxn_dbg_start_client(&(buxn_dbg_client_args_t){
 		.socket = sock,
 	});
-	return true;
+
+	bio_call_status_t status = buxn_dbg_client_send(*client, (buxn_dbgx_msg_t){
+		.type = BUXN_DBGX_MSG_INIT,
+		.init = *init_info,
+	});
+	if (status == BIO_CALL_OK) {
+		return true;
+	} else {
+		bio_net_close(sock, NULL);
+		bio_stop_service(*client);
+		return false;
+	}
 }

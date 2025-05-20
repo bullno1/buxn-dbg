@@ -10,6 +10,7 @@ typedef enum {
 	SERVER_MSG_VM_NOTIFICATION,
 	SERVER_MSG_VM_DISCONNECTED,
 	SERVER_MSG_NEW_CLIENT,
+	SERVER_MSG_TERMINATE_CLIENT,
 	SERVER_MSG_CLIENT_TERMINATED,
 } server_msg_type_t;
 
@@ -18,13 +19,12 @@ typedef struct {
 
 	union {
 		struct {
-			buxn_dbg_msg_t msg;
-		} vm_notification;
+			int id;
+		} terminate_client;
 
 		struct {
-			int id;
-			buxn_dbgx_msg_t msg;
-		} client_request;
+			buxn_dbg_msg_t msg;
+		} vm_notification;
 
 		struct {
 			int id;
@@ -302,6 +302,9 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 				clients[msg.client_terminated.id].id = -1;
 				clients[msg.client_terminated.id].client = (buxn_dbg_client_handler_t){ 0 };
 			} break;
+			case SERVER_MSG_TERMINATE_CLIENT: {
+				buxn_dbg_stop_client_handler(clients[msg.terminate_client.id].client);
+			} break;
 		}
 	}
 	bio_close_mailbox(mailbox);
@@ -366,6 +369,15 @@ buxn_dbg_vm_disconnected(buxn_dbg_vm_controller_t* controller) {
 	bio_wait_and_send_message(true, controller->server_mailbox, msg_to_server);
 }
 
+static void
+terminate_client(buxn_dbg_client_controller_t* controller) {
+	server_msg_t msg_to_server = {
+		.type = SERVER_MSG_TERMINATE_CLIENT,
+		.terminate_client.id = controller->id,
+	};
+	bio_wait_and_send_message(true, controller->shared_ctx->server_mailbox, msg_to_server);
+}
+
 void
 buxn_dbg_client_request(buxn_dbg_client_controller_t* controller, buxn_dbgx_msg_t msg) {
 	switch (msg.type) {
@@ -376,7 +388,7 @@ buxn_dbg_client_request(buxn_dbg_client_controller_t* controller, buxn_dbgx_msg_
 				buxn_dbg_notify_client_sync(controller->client, msg);
 			} else {
 				BIO_WARN("Client %d sends invalid core message", controller->id);
-				buxn_dbg_stop_client_handler(controller->client);
+				terminate_client(controller);
 			}
 		} break;
 		case BUXN_DBGX_MSG_LOG: {
@@ -388,8 +400,8 @@ buxn_dbg_client_request(buxn_dbg_client_controller_t* controller, buxn_dbgx_msg_
 			buxn_dbg_notify_client_sync(controller->client, msg);
 		} break;
 		default: {
-			BIO_WARN("Client %d sends invalid core message", controller->id);
-			buxn_dbg_stop_client_handler(controller->client);
+			BIO_WARN("Client %d sends invalid message", controller->id);
+			terminate_client(controller);
 		} break;
 	}
 }

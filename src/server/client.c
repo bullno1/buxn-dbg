@@ -47,9 +47,12 @@ reader_entry(void* userdata) {
 
 		if (msg.type == BUXN_DBGX_MSG_BYE) {
 			break;
+		} else if (msg.type == BUXN_DBGX_MSG_INIT) {
+			snprintf(name_buf, sizeof(name_buf), "client:%s", msg.init.client_name);
+			bio_set_coro_name(name_buf);
+		} else {
+			buxn_dbg_client_request(ctx->controller, msg);
 		}
-
-		buxn_dbg_client_request(ctx->controller, msg);
 	}
 
 	buxn_dbg_client_handler_msg_t term_msg = {

@@ -11,7 +11,11 @@ bio_main(void* userdata) {
 	args_t* args = userdata;
 
 	buxn_dbg_client_t client;
-	if (!buxn_dbg_make_client(&client, &args->connect_transport)) {
+	if (!buxn_dbg_make_client(
+		&client,
+		&args->connect_transport,
+		&(buxn_dbgx_init_t){ .client_name = "log" }
+	)) {
 		return 1;
 	}
 	int exit_code = 1;
