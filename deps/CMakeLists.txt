@@ -1,3 +1,7 @@
+# termbox2
+add_library(termbox2 INTERFACE)
+target_include_directories(termbox2 INTERFACE "termbox2")
+
 # buxn
 add_library(buxn INTERFACE)
 target_include_directories(buxn INTERFACE "buxn/include")

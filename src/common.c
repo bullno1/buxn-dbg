@@ -189,6 +189,9 @@ bio_enter(bio_entry_fn_t entry, void* userdata) {
 			.current_filename = __FILE__,
 			.current_depth_in_project = 1,
 		},
+		.thread_pool = {
+			.num_threads = 4,
+		},
 	});
 
 	bio_entry_data_t entry_data = {
