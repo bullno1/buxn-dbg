@@ -308,3 +308,106 @@ void
 buxn_dbg_destroy_bserial_io(bserial_io_t* io) {
 	buxn_dbg_free(io);
 }
+
+static const char*
+barg_parse_transport(void* userdata, const char* value) {
+	if (buxn_dbg_parse_transport(value, userdata)) {
+		return NULL;
+	} else {
+		return "Invalid transport";
+	}
+}
+
+static const char*
+barg_parse_connect_transport(void* userdata, const char* value) {
+	buxn_dbg_transport_info_t transport;
+	if (
+		buxn_dbg_parse_transport(value, &transport)
+		&& transport.type == BUXN_DBG_TRANSPORT_NET_CONNECT
+	) {
+		*(buxn_dbg_transport_info_t*)userdata = transport;
+		return NULL;
+	} else {
+		return "Invalid transport";
+	}
+}
+
+static const char*
+barg_parse_listen_transport(void* userdata, const char* value) {
+	buxn_dbg_transport_info_t transport;
+	if (
+		buxn_dbg_parse_transport(value, &transport)
+		&& transport.type == BUXN_DBG_TRANSPORT_NET_LISTEN
+	) {
+		*(buxn_dbg_transport_info_t*)userdata = transport;
+		return NULL;
+	} else {
+		return "Invalid transport";
+	}
+}
+
+barg_opt_parser_t
+barg_transport(buxn_dbg_transport_info_t* out) {
+	return (barg_opt_parser_t){
+		.userdata = out,
+		.parse = barg_parse_transport,
+	};
+}
+
+barg_opt_parser_t
+barg_connect_transport(buxn_dbg_transport_info_t* out) {
+	return (barg_opt_parser_t){
+		.userdata = out,
+		.parse = barg_parse_connect_transport,
+	};
+}
+
+barg_opt_parser_t
+barg_listen_transport(buxn_dbg_transport_info_t* out) {
+	return (barg_opt_parser_t){
+		.userdata = out,
+		.parse = barg_parse_listen_transport,
+	};
+}
+
+
+static const char*
+barg_parse_log_level(void* userdata, const char* arg) {
+	bio_log_level_t* level = userdata;
+	if (strcmp(arg, "trace") == 0) {
+		*level = BIO_LOG_LEVEL_TRACE;
+		return NULL;
+	} else if (strcmp(arg, "debug") == 0) {
+		*level = BIO_LOG_LEVEL_DEBUG;
+		return NULL;
+	} else if (strcmp(arg, "info") == 0) {
+		*level = BIO_LOG_LEVEL_INFO;
+		return NULL;
+	} else if (strcmp(arg, "warn") == 0) {
+		*level = BIO_LOG_LEVEL_WARN;
+		return NULL;
+	} else if (strcmp(arg, "error") == 0) {
+		*level = BIO_LOG_LEVEL_ERROR;
+		return NULL;
+	} else if (strcmp(arg, "fatal") == 0) {
+		*level = BIO_LOG_LEVEL_FATAL;
+		return NULL;
+	} else {
+		return "Invalid log level";
+	}
+}
+
+barg_opt_parser_t
+barg_log_level(bio_log_level_t* out) {
+	return (barg_opt_parser_t){
+		.userdata = out,
+		.parse = barg_parse_log_level,
+	};
+}
+
+barg_opt_t
+barg_opt_hidden_help(void) {
+	barg_opt_t opt = barg_opt_help();
+	opt.hidden = true;
+	return opt;
+}

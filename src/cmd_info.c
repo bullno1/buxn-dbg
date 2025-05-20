@@ -1,5 +1,3 @@
-#include <stdio.h>
-#include "bflag.h"
 #include "cmd.h"
 #include "common.h"
 #include "client.h"
@@ -56,37 +54,31 @@ end:
 	return 0;
 }
 
-BUXN_DBG_CMD(
-	info,
-	"Show information about the current state",
-	"[flags]\n\n"
-	"Available flags:\n\n"
-	CONNECT_FLAG_HELP
-) {
-	bool connect_set = false;
-	args_t args;
+BUXN_DBG_CMD(info, "Show information about the current state") {
+	args_t args = { 0 };
 	buxn_dbg_parse_transport("abstract-connect:buxn/dbg", &args.connect_transport);
-	for (int i = 1; i < argc; ++i) {
-		const char* arg;
-		if ((arg = parse_flag(argv[i], "-connect=")) != NULL) {
-			if (connect_set) {
-				fprintf(stderr, "-connect= can only be specified once");
-				return 1;
-			}
 
-			if (
-				!buxn_dbg_parse_transport(arg, &args.connect_transport)
-				|| args.connect_transport.type != BUXN_DBG_TRANSPORT_NET_CONNECT
-			) {
-				fprintf(stderr, "Invalid transport: %s\n", arg);
-				return 1;
-			}
-
-			connect_set = true;
-		} else {
-			fprintf(stderr, "Invalid flag: %s\n", argv[i]);
-			return 1;
-		}
+	barg_opt_t opts[] = {
+		{
+			.name = "connect",
+			.short_name = 'c',
+			.value_name = "transport",
+			.parser = barg_transport(&args.connect_transport),
+			.summary = "How to connect to the debug server",
+			.description = CONNECT_TRANSPORT_OPT_DESC,
+		},
+		barg_opt_hidden_help(),
+	};
+	barg_t barg = {
+		.usage = "buxn-dbg info [options]",
+		.summary = self->description,
+		.num_opts = sizeof(opts) / sizeof(opts[0]),
+		.opts = opts,
+	};
+	barg_result_t result = barg_parse(&barg, argc, argv);
+	if (result.status != BARG_OK) {
+		barg_print_result(&barg, result, stderr);
+		return result.status == BARG_PARSE_ERROR;
 	}
 
 	return bio_enter(bio_main, &args);

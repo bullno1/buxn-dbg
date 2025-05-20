@@ -14,3 +14,6 @@
 [submodule "deps/liburing"]
 	path = deps/liburing
 	url = https://github.com/axboe/liburing.git
+[submodule "deps/termbox2"]
+	path = deps/termbox2
+	url = https://github.com/termbox/termbox2.git

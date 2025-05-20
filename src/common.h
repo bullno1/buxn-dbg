@@ -4,6 +4,7 @@
 #include <bio/net.h>
 #include <bio/file.h>
 #include <bserial.h>
+#include "barg.h"
 
 #define BUXN_CONTAINER_OF(ptr, type, member) \
 	((type *)((char *)(1 ? (ptr) : &((type *)0)->member) - offsetof(type, member)))
@@ -74,5 +75,20 @@ buxn_dbg_make_bserial_io_from_socket(bio_socket_t socket);
 
 void
 buxn_dbg_destroy_bserial_io(bserial_io_t* io);
+
+barg_opt_parser_t
+barg_transport(buxn_dbg_transport_info_t* out);
+
+barg_opt_parser_t
+barg_connect_transport(buxn_dbg_transport_info_t* out);
+
+barg_opt_parser_t
+barg_listen_transport(buxn_dbg_transport_info_t* out);
+
+barg_opt_parser_t
+barg_log_level(bio_log_level_t* out);
+
+barg_opt_t
+barg_opt_hidden_help(void);
 
 #endif

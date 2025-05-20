@@ -20,8 +20,3 @@ print_cmd_list(void) {
 		fprintf(stderr, "* %s: %s\n", help->name, help->description);
 	}
 }
-
-void
-print_cmd_usage(const buxn_dbg_cmd_entry_t* cmd) {
-	fprintf(stderr, "Usage: buxn-dbg %s %s", cmd->name, cmd->help);
-}

@@ -3,29 +3,36 @@
 
 #include <autolist.h>
 
-#define CONNECT_FLAG_HELP \
-	"* -connect=<transport>: How to connect to the debug server.\n" \
-	"  Default value: abstract-connect:buxn/dbg\n" \
-	"  Available transports:\n\n" \
-	"  * tcp-connect:<address>:<port>: Connect to an address\n" \
-	"  * unix-connect:<name>: Connect to a unix domain socket\n" \
-	"  * abstract-connect:<name>: Connect to an abstract socket\n" \
+#define CONNECT_TRANSPORT_OPT_DESC \
+	"Default value: abstract-connect:buxn/dbg\n" \
+	"Available transports:\n\n" \
+	"* tcp-connect:<address>:<port>: Connect to an address\n" \
+	"* unix-connect:<name>: Connect to a unix domain socket\n" \
+	"* abstract-connect:<name>: Connect to an abstract socket\n" \
+
+#define LOG_LEVEL_OPT_DESC \
+	"Default level: info\n" \
+	"Valid levels:\n\n" \
+	"* trace\n" \
+	"* debug\n" \
+	"* info\n" \
+	"* warn\n" \
+	"* error\n" \
+	"* fatal\n"
 
 typedef struct buxn_dbg_cmd_entry_s buxn_dbg_cmd_entry_t;
 
 struct buxn_dbg_cmd_entry_s {
 	const char* name;
 	const char* description;
-	const char* help;
 	int (*main)(const buxn_dbg_cmd_entry_t* self, int argc, const char** argv);
 };
 
-#define BUXN_DBG_CMD(NAME, DESCRIPTION, HELP) \
+#define BUXN_DBG_CMD(NAME, DESCRIPTION) \
 	static int buxn_dbg_cmd_main_##NAME(const buxn_dbg_cmd_entry_t* self, int argc, const char** argv); \
 	AUTOLIST_ENTRY(buxn_dbg__commands, buxn_dbg_cmd_entry_t, buxn_dbg_cmd_entry_##NAME) = { \
 		.name = #NAME, \
 		.description = DESCRIPTION, \
-		.help = HELP, \
 		.main = buxn_dbg_cmd_main_##NAME, \
 	}; \
 	static int buxn_dbg_cmd_main_##NAME(const buxn_dbg_cmd_entry_t* self, int argc, const char** argv)
@@ -42,8 +49,5 @@ AUTOLIST_DECLARE(buxn_dbg__commands)
 
 void
 print_cmd_list(void);
-
-void
-print_cmd_usage(const buxn_dbg_cmd_entry_t* cmd);
 
 #endif
