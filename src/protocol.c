@@ -1,6 +1,11 @@
 #include "protocol.h"
 #include <string.h>
 
+static inline void*
+buxn_dbgx_protocol_alloc(buxn_dbg_msg_buffer_t buffer, size_t alignment) {
+	return (void*)(((intptr_t)buffer + (intptr_t)alignment - 1) & -(intptr_t)alignment);
+}
+
 bserial_status_t
 buxn_dbgx_protocol_msg_header(bserial_ctx_t* ctx, buxn_dbgx_msg_t* msg) {
 	uint8_t type = msg->type;
@@ -55,16 +60,27 @@ buxn_dbgx_protocol_msg_body(
 				}
 			}
 		} break;
-		case BUXN_DBGX_MSG_FOCUS: {
-			BSERIAL_RECORD(ctx, &msg->focus) {
-				BSERIAL_KEY(ctx, type) {
-					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->focus.type));
+		case BUXN_DBGX_MSG_INFO_REQ:
+			if (bserial_mode(ctx) == BSERIAL_MODE_READ) {
+				msg->info = buxn_dbgx_protocol_alloc(buffer, _Alignof(buxn_dbgx_info_t));
+			}
+			break;
+		case BUXN_DBGX_MSG_INFO_REP:
+			BSERIAL_RECORD(ctx, msg->info) {
+				BSERIAL_KEY(ctx, "vector_addr") {
+					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->info->vector_addr));
 				}
-				BSERIAL_KEY(ctx, address) {
-					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->focus.address));
+				BSERIAL_KEY(ctx, "brkp_id") {
+					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->info->brkp_id));
+				}
+				BSERIAL_KEY(ctx, "vm_executing") {
+					BSERIAL_CHECK_STATUS(bserial_bool(ctx, &msg->info->vm_executing));
+				}
+				BSERIAL_KEY(ctx, "vm_paused") {
+					BSERIAL_CHECK_STATUS(bserial_bool(ctx, &msg->info->vm_paused));
 				}
 			}
-		} break;
+			break;
 	}
 
 	return BSERIAL_OK;

@@ -14,6 +14,7 @@ bio_main(void* userdata) {
 	if (!buxn_dbg_make_client(&client, &args->connect_transport)) {
 		return 1;
 	}
+	int exit_code = 1;
 
 	uint16_t pc;
 	buxn_dbg_stack_info_t wst;
@@ -46,12 +47,25 @@ bio_main(void* userdata) {
 	});
 	if (status != BIO_CALL_OK) { goto end; }
 
+	buxn_dbgx_info_t info = { 0 };
+	status = buxn_dbg_client_send(client, (buxn_dbgx_msg_t){
+		.type = BUXN_DBGX_MSG_INFO_REQ,
+		.info = &info,
+	});
+	if (status != BIO_CALL_OK) { goto end; }
+
 	BIO_INFO("pc = 0x%04x", pc);
 	BIO_INFO("System/wst = %d", wst.pointer);
 	BIO_INFO("System/rst = %d", rst.pointer);
+	BIO_INFO("vector_addr = 0x%04x", info.vector_addr);
+	BIO_INFO("brkp_id = %d", info.brkp_id);
+	BIO_INFO("vm_executing = %d", info.vm_executing);
+	BIO_INFO("vm_paused = %d", info.vm_paused);
+
+	exit_code = 0;
 end:
 	buxn_dbg_stop_client(client);
-	return 0;
+	return exit_code;
 }
 
 BUXN_DBG_CMD(info, "Show information about the current state") {

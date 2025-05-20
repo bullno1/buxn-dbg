@@ -139,6 +139,7 @@ buxn_dbg_parse_transport(const char* str, buxn_dbg_transport_info_t* info) {
 
 static void
 bio_entry_wrapper(void* userdata) {
+	bio_set_coro_name("main");
 	bio_entry_data_t* entry_data = userdata;
 
 	buxn_main_logger = bio_add_file_logger(

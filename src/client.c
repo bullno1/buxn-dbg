@@ -27,9 +27,25 @@ typedef struct {
 	bool should_terminate;
 } client_reader_ctx_t;
 
+static bool
+next_pending_cmd(client_reader_ctx_t* ctx, buxn_dbg_client_msg_t* cmd) {
+	size_t num_pending_cmds = barray_len(ctx->pending_cmds);
+	if (num_pending_cmds == 0) { return false; }
+
+	*cmd = ctx->pending_cmds[0];
+	memmove(
+		ctx->pending_cmds,
+		ctx->pending_cmds + 1,
+		sizeof(*cmd) * (num_pending_cmds - 1)
+	);
+	barray_resize(ctx->pending_cmds, num_pending_cmds - 1, NULL);
+	return true;
+}
+
 static void
 reader_entry(void* userdata) {
 	client_reader_ctx_t* ctx = userdata;
+	bio_set_coro_name("client/reader");
 
 	while (!ctx->should_terminate) {
 		buxn_dbgx_msg_t server_msg;
@@ -43,23 +59,15 @@ reader_entry(void* userdata) {
 			}
 
 			if (server_msg.core.type == BUXN_DBG_MSG_COMMAND_REP) {
-				size_t num_pending_cmds = barray_len(ctx->pending_cmds);
-				if (num_pending_cmds == 0) { break; }
-
-				buxn_dbg_client_msg_t cmd = ctx->pending_cmds[0];
-				memmove(
-					ctx->pending_cmds,
-					ctx->pending_cmds + 1,
-					sizeof(cmd) * (num_pending_cmds - 1)
-				);
-				barray_resize(ctx->pending_cmds, num_pending_cmds - 1, NULL);
-				server_msg.core.cmd = cmd.msg.core.cmd;
+				buxn_dbg_client_msg_t pending_cmd;
+				if (!next_pending_cmd(ctx, &pending_cmd)) { break; }
+				server_msg.core.cmd = pending_cmd.msg.core.cmd;
 				if (buxn_dbg_protocol_msg_body(ctx->bserial_in, NULL, &server_msg.core) != BSERIAL_OK) {
 					break;
 				}
 
 				// TODO: handle cancellation
-				bio_respond(cmd) { }
+				bio_respond(pending_cmd) { }
 			} else {
 				if (buxn_dbg_protocol_msg_body(ctx->bserial_in, NULL, &server_msg.core) != BSERIAL_OK) {
 					break;
@@ -68,6 +76,18 @@ reader_entry(void* userdata) {
 					ctx->args->msg_handler(server_msg, ctx->args->userdata);
 				}
 			}
+		} else if (
+			server_msg.type == BUXN_DBGX_MSG_INFO_REP
+		) {
+			buxn_dbg_client_msg_t pending_cmd;
+			if (!next_pending_cmd(ctx, &pending_cmd)) { break; }
+			server_msg.info = pending_cmd.msg.info;
+
+			if (buxn_dbgx_protocol_msg_body(ctx->bserial_in, NULL, &server_msg) != BSERIAL_OK) {
+				break;
+			}
+
+			bio_respond(pending_cmd) { }
 		} else {
 			if (buxn_dbgx_protocol_msg_body(ctx->bserial_in, NULL, &server_msg) != BSERIAL_OK) {
 				break;
@@ -94,6 +114,7 @@ client_entry(void* userdata) {
 	buxn_dbg_client_mailbox_t mailbox;
 	bio_get_service_info(userdata, &mailbox, &args);
 	bio_set_coro_data(&args, &BUXN_CLIENT_DATA);
+	bio_set_coro_name("client");
 
 	bserial_io_t* io = buxn_dbg_make_bserial_io_from_socket(args.socket);
 	client_reader_ctx_t ctx = {
@@ -112,7 +133,10 @@ client_entry(void* userdata) {
 					break;
 				}
 
-				if (msg.msg.type == BUXN_DBGX_MSG_CORE) {
+				if (
+					msg.msg.type == BUXN_DBGX_MSG_CORE
+					|| msg.msg.type == BUXN_DBGX_MSG_INFO_REQ
+				) {
 					barray_push(ctx.pending_cmds, msg, NULL);
 				} else {
 					bio_respond(msg) { }
@@ -155,6 +179,7 @@ buxn_dbg_client_send(buxn_dbg_client_t client, buxn_dbgx_msg_t msg) {
 	if (
 		msg.type == BUXN_DBGX_MSG_CORE
 		|| msg.type == BUXN_DBGX_MSG_LOG
+		|| msg.type == BUXN_DBGX_MSG_INFO_REQ
 	) {
 		bio_signal_t cancel_signal = { 0 };
 		return bio_call_service(client, msg_to_service, cancel_signal);

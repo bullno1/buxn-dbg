@@ -5,25 +5,24 @@
 #include <bio/bio.h>
 
 typedef enum {
-	BUXN_DBGX_MSG_CORE   = 0,
-	BUXN_DBGX_MSG_FOCUS  = 1,
-	BUXN_DBGX_MSG_LOG    = 2,
+	BUXN_DBGX_MSG_CORE        = 0,
+	BUXN_DBGX_MSG_LOG         = 1,
+	BUXN_DBGX_MSG_INFO_REQ    = 2,
+	BUXN_DBGX_MSG_INFO_REP    = 3,
 } buxn_dbgx_msg_type_t;
 
-typedef enum {
-	BUXN_DBGP_FOCUS_HOVER    = 0,
-	BUXN_DBGP_FOCUS_CURRENT  = 1,
-} buxn_dbgx_focus_type_t;
+typedef struct {
+	uint16_t vector_addr;
+	uint8_t brkp_id;
+	bool vm_executing;
+	bool vm_paused;
+} buxn_dbgx_info_t;
 
 typedef struct {
 	buxn_dbgx_msg_type_t type;
 	union {
 		buxn_dbg_msg_t core;
-
-		struct {
-			buxn_dbgx_focus_type_t type;
-			uint16_t address;
-		} focus;
+		buxn_dbgx_info_t* info;
 
 		struct {
 			bio_log_level_t level;

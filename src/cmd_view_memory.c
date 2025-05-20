@@ -38,11 +38,9 @@ bio_main(void* userdata) {
 
 	bool should_run = true;
 	while (should_run) {
-		BIO_TRACE("Rendering");
 		tb_clear();
 		bio_tb_present();
 
-		BIO_TRACE("Waiting for events");
 		bio_tb_foreach_message(event, mailbox) {
 			if (event.type == TB_EVENT_KEY) {
 				if (
@@ -52,7 +50,6 @@ bio_main(void* userdata) {
 				) {
 					should_run = false;
 				}
-				BIO_TRACE("Key event");
 			}
 		}
 	}

@@ -11,7 +11,6 @@ typedef enum {
 	SERVER_MSG_VM_DISCONNECTED,
 	SERVER_MSG_NEW_CLIENT,
 	SERVER_MSG_CLIENT_TERMINATED,
-	SERVER_MSG_CLIENT_REQUEST,
 } server_msg_type_t;
 
 typedef struct {
@@ -41,11 +40,13 @@ typedef BIO_MAILBOX(server_msg_t) server_mailbox_t;
 
 struct buxn_dbg_vm_controller_s {
 	server_mailbox_t server_mailbox;
+	buxn_dbgx_info_t info;
 };
 
 typedef struct {
-	buxn_dbg_vm_handler_t vm;
 	server_mailbox_t server_mailbox;
+	buxn_dbg_vm_handler_t vm;
+	buxn_dbg_vm_controller_t* vm_controller;
 } client_shared_ctx_t;
 
 struct buxn_dbg_client_controller_s {
@@ -228,6 +229,9 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 	buxn_dbg_vm_handler_t vm = { 0 };
 	buxn_dbg_vm_controller_t vm_controller = {
 		.server_mailbox = mailbox,
+		.info = {
+			.brkp_id = BUXN_DBG_BRKP_NONE,
+		},
 	};
 	if (should_run) {
 		client_shared_ctx.vm = buxn_dbg_start_vm_handler(&(buxn_dbg_vm_handler_args_t){
@@ -237,6 +241,7 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 			.vm_conn_file = vm_conn_file,
 			.vm_conn_socket = vm_conn_socket,
 		});
+		client_shared_ctx.vm_controller = &vm_controller;
 	}
 
 	while (should_run) {
@@ -297,19 +302,6 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 				clients[msg.client_terminated.id].id = -1;
 				clients[msg.client_terminated.id].client = (buxn_dbg_client_handler_t){ 0 };
 			} break;
-			case SERVER_MSG_CLIENT_REQUEST: {
-				buxn_dbgx_msg_t client_req = msg.client_request.msg;
-				switch (client_req.type) {
-					case BUXN_DBGX_MSG_CORE:
-						BIO_WARN("Core message reached main loop");
-						break;
-					case BUXN_DBGX_MSG_FOCUS:
-						break;
-					case BUXN_DBGX_MSG_LOG:
-						BIO_WARN("Log message reached main loop");
-						break;
-				}
-			} break;
 		}
 	}
 	bio_close_mailbox(mailbox);
@@ -337,6 +329,28 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 
 void
 buxn_dbg_vm_notify(buxn_dbg_vm_controller_t* controller, buxn_dbg_msg_t msg) {
+	switch (msg.type) {
+		case BUXN_DBG_MSG_BEGIN_EXEC:
+			controller->info.vm_executing = true;
+			controller->info.vector_addr = msg.addr;
+			break;
+		case BUXN_DBG_MSG_END_EXEC:
+			controller->info.vm_executing = false;
+			break;
+		case BUXN_DBG_MSG_BEGIN_BREAK:
+			controller->info.brkp_id = msg.brkp_id;
+			break;
+		case BUXN_DBG_MSG_END_BREAK:
+			controller->info.vm_paused = false;
+			break;
+		case BUXN_DBG_MSG_PAUSED:
+			controller->info.vm_paused = true;
+			break;
+		case BUXN_DBG_MSG_COMMAND_REQ:
+		case BUXN_DBG_MSG_COMMAND_REP:
+			break;
+	}
+
 	server_msg_t msg_to_server = {
 		.type = SERVER_MSG_VM_NOTIFICATION,
 		.vm_notification.msg = msg,
@@ -354,22 +368,29 @@ buxn_dbg_vm_disconnected(buxn_dbg_vm_controller_t* controller) {
 
 void
 buxn_dbg_client_request(buxn_dbg_client_controller_t* controller, buxn_dbgx_msg_t msg) {
-	if (msg.type == BUXN_DBGX_MSG_CORE) {
-		if (msg.core.type == BUXN_DBG_MSG_COMMAND_REQ) {
-			buxn_dbg_send_vm_cmd(controller->shared_ctx->vm, msg.core.cmd, (bio_signal_t){ 0 });
-			msg.core.type = BUXN_DBG_MSG_COMMAND_REP;
+	switch (msg.type) {
+		case BUXN_DBGX_MSG_CORE: {
+			if (msg.core.type == BUXN_DBG_MSG_COMMAND_REQ) {
+				buxn_dbg_send_vm_cmd(controller->shared_ctx->vm, msg.core.cmd, (bio_signal_t){ 0 });
+				msg.core.type = BUXN_DBG_MSG_COMMAND_REP;
+				buxn_dbg_notify_client_sync(controller->client, msg);
+			} else {
+				BIO_WARN("Client %d sends invalid core message", controller->id);
+				buxn_dbg_stop_client_handler(controller->client);
+			}
+		} break;
+		case BUXN_DBGX_MSG_LOG: {
+			bio_log(msg.log.level, msg.log.file, msg.log.line, "%s", msg.log.msg);
+		} break;
+		case BUXN_DBGX_MSG_INFO_REQ: {
+			*msg.info = controller->shared_ctx->vm_controller->info;
+			msg.type = BUXN_DBGX_MSG_INFO_REP;
 			buxn_dbg_notify_client_sync(controller->client, msg);
-		} else {
+		} break;
+		default: {
 			BIO_WARN("Client %d sends invalid core message", controller->id);
 			buxn_dbg_stop_client_handler(controller->client);
-		}
-	} else if (msg.type == BUXN_DBGX_MSG_LOG) {
-		bio_log(msg.log.level, msg.log.file, msg.log.line, "%s", msg.log.msg);
-	} else {
-		server_msg_t msg_to_server = {
-			.type = SERVER_MSG_CLIENT_REQUEST,
-		};
-		bio_wait_and_send_message(true, controller->shared_ctx->server_mailbox, msg_to_server);
+		} break;
 	}
 }
 
