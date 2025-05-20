@@ -163,6 +163,7 @@ buxn_dbg_start_client(const buxn_dbg_client_args_t* args) {
 
 void
 buxn_dbg_stop_client(buxn_dbg_client_t client) {
+	buxn_dbg_client_send(client, (buxn_dbgx_msg_t){ .type = BUXN_DBGX_MSG_BYE });
 	buxn_dbg_client_args_t* args = bio_get_coro_data(client.coro, &BUXN_CLIENT_DATA);
 	if (args != NULL) {
 		bio_net_close(args->socket, NULL);
@@ -177,7 +178,8 @@ buxn_dbg_client_send(buxn_dbg_client_t client, buxn_dbgx_msg_t msg) {
 		.msg = msg,
 	};
 	if (
-		msg.type == BUXN_DBGX_MSG_CORE
+		msg.type == BUXN_DBGX_MSG_BYE
+		|| msg.type == BUXN_DBGX_MSG_CORE
 		|| msg.type == BUXN_DBGX_MSG_LOG
 		|| msg.type == BUXN_DBGX_MSG_INFO_REQ
 	) {

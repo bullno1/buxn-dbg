@@ -5,10 +5,11 @@
 #include <bio/bio.h>
 
 typedef enum {
-	BUXN_DBGX_MSG_CORE        = 0,
-	BUXN_DBGX_MSG_LOG         = 1,
-	BUXN_DBGX_MSG_INFO_REQ    = 2,
-	BUXN_DBGX_MSG_INFO_REP    = 3,
+	BUXN_DBGX_MSG_BYE         = 0,
+	BUXN_DBGX_MSG_CORE        = 1,
+	BUXN_DBGX_MSG_LOG         = 2,
+	BUXN_DBGX_MSG_INFO_REQ    = 3,
+	BUXN_DBGX_MSG_INFO_REP    = 4,
 } buxn_dbgx_msg_type_t;
 
 typedef struct {

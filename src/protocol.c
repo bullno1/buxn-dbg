@@ -22,6 +22,8 @@ buxn_dbgx_protocol_msg_body(
 ) {
 	uint8_t type = msg->type;
 	switch ((buxn_dbgx_msg_type_t)type) {
+		case BUXN_DBGX_MSG_BYE:
+			break;
 		case BUXN_DBGX_MSG_CORE:
 			BSERIAL_CHECK_STATUS(buxn_dbg_protocol_msg(ctx, buffer, &msg->core));
 			break;

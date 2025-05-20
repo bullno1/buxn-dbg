@@ -45,6 +45,10 @@ reader_entry(void* userdata) {
 			break;
 		}
 
+		if (msg.type == BUXN_DBGX_MSG_BYE) {
+			break;
+		}
+
 		buxn_dbg_client_request(ctx->controller, msg);
 	}
 
