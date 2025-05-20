@@ -49,14 +49,22 @@ bio_tb_event_poller(void* userdata) {
 	bio_raise_signal(ctx->ready_sig);
 	BIO_DEBUG("termbox poller started");
 
+	struct tb_event event_buf[8];
+	int event_buf_len = sizeof(event_buf) / sizeof(event_buf[0]);
+
 	while (!ctx->should_terminate) {
-		struct tb_event event;
-		int poll_result = bio_tb_peek_event(&event, -1);
+		int num_events = 0;
+		int poll_result = bio_tb_peek_event(&event_buf[num_events], -1);
 		if (poll_result != TB_OK) { bio_yield(); }
 
-		while (poll_result == TB_OK) {
-			ctx->options.event_callback(ctx->options.userdata, &event);
-			poll_result = bio_tb_peek_event(&event, 0);
+		while (poll_result == TB_OK && num_events < event_buf_len - 1) {
+			++num_events;
+			poll_result = bio_tb_peek_event(&event_buf[num_events], 0);
+		}
+		if (poll_result == TB_OK) { ++num_events; }
+
+		for (int i = 0; i < num_events; ++i) {
+			ctx->options.event_callback(ctx->options.userdata, &event_buf[i]);
 		}
 	}
 
