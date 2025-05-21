@@ -18,6 +18,7 @@ typedef struct {
 typedef struct {
 	const char* content;
 	int len;
+	barray(const buxn_dbg_sym_t*) symbols;
 } source_line_t;
 
 typedef struct {
@@ -52,6 +53,7 @@ typedef BIO_MAILBOX(msg_t) mailbox_t;
 
 typedef struct {
 	mailbox_t main_mailbox;
+	buxn_dbg_client_t client;
 	const buxn_dbg_symtab_t* symtab;
 	source_set_t* source_set;
 	uint16_t focus_address;
@@ -120,7 +122,6 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 		}
 
 		int num_lines = barray_len(source.lines);
-		int symbol_index = 0;
 		for (int line = top_line; line <= bottom_line; ++line) {
 			if (line > num_lines) { break; }
 
@@ -133,11 +134,8 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			);
 
 			// Semantic highlighting by drawing over the current line
-			// TODO: for multi byte symbols (e.g: #02), we over draw the same
-			// cell multiple times.
-			// This could be slow
-			for (; symbol_index < ctx->symtab->num_symbols; ++symbol_index) {
-				const buxn_dbg_sym_t* symbol = &ctx->symtab->symbols[symbol_index];
+			for (int i = 0; i < (int)barray_len(source_line->symbols); ++i) {
+				const buxn_dbg_sym_t* symbol = source_line->symbols[i];
 				const buxn_asm_file_range_t* range = &symbol->region.range;
 				if (range->start.line > line) {
 					break;
@@ -193,14 +191,167 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 		bio_tb_present();
 
+		const buxn_dbg_sym_t* old_focused_symbol = focused_symbol;
 		buxn_tui_loop(msg, mailbox) {
 			switch (buxn_tui_handle_event(&msg)) {
+				case BUXN_TUI_MOVE_LEFT:
+					if (focused_symbol != NULL) {
+						// Search backward in the symbol table for:
+						//
+						// * A symbol in the same file
+						// * Has an end byte before the focused symbol start byte
+						// * Has an end address before the focused address
+						int sym_index = (int)(focused_symbol - ctx->symtab->symbols);
+						for (int i = sym_index - 1; i >= 0; --i) {
+							const buxn_dbg_sym_t* symbol = &ctx->symtab->symbols[i];
+							if (
+								symbol->region.filename == focused_symbol->region.filename
+								&& symbol->region.range.end.byte < focused_symbol->region.range.start.byte
+								&& symbol->addr_max < ctx->focus_address
+							) {
+								focused_symbol = symbol;
+								break;
+							}
+						}
+					}
+					break;
+				case BUXN_TUI_MOVE_RIGHT:
+					if (focused_symbol != NULL) {
+						// Search forward in the symbol table for:
+						//
+						// * A symbol in the same file
+						// * Has a start byte after the focused symbol end byte
+						// * Has an start address before the focused address
+						int sym_index = (int)(focused_symbol - ctx->symtab->symbols);
+						for (int i = sym_index + 1; i < ctx->symtab->num_symbols; ++i) {
+							const buxn_dbg_sym_t* symbol = &ctx->symtab->symbols[i];
+							if (
+								symbol->region.filename == focused_symbol->region.filename
+								&& symbol->region.range.start.byte > focused_symbol->region.range.end.byte
+								&& symbol->addr_min > ctx->focus_address
+							) {
+								focused_symbol = symbol;
+								break;
+							}
+						}
+					}
+					break;
+				case BUXN_TUI_MOVE_UP:
+					if (focused_symbol != NULL && source.lines != NULL) {
+						buxn_asm_file_range_t sym_range = focused_symbol->region.range;
+						int sym_lineno = sym_range.start.line;
+
+						// Search upward in lines for a line with at least a
+						// symbol whose end address is before the focused address
+						source_line_t* line = NULL;
+						for (int i = sym_lineno - 1; i >= 1; --i) {
+							source_line_t* candidate_line = &source.lines[i - 1];
+							for (int j = 0; j < (int)barray_len(candidate_line->symbols); ++j) {
+								if (candidate_line->symbols[j]->addr_max < ctx->focus_address) {
+									line = candidate_line;
+									break;
+								}
+							}
+
+							if (line != NULL) { break; }
+						}
+
+						// Search within this line for a symbol whose column is
+						// the closest to the focused symbol
+						const buxn_dbg_sym_t* next_sym = NULL;
+						if (line != NULL) {
+							int col_diff = INT_MAX;
+							for (int i = 0; i < (int)barray_len(line->symbols); ++i) {
+								const buxn_dbg_sym_t* candidate_sym = line->symbols[i];
+								int candidate_col_diff = abs(
+									candidate_sym->region.range.start.col - sym_range.start.col
+								);
+								if (candidate_col_diff < col_diff) {
+									next_sym = candidate_sym;
+									col_diff = candidate_col_diff;
+								}
+							}
+						}
+
+						if (next_sym != NULL) {
+							focused_symbol = next_sym;
+						}
+					}
+					break;
+				case BUXN_TUI_MOVE_DOWN:
+					if (focused_symbol != NULL) {
+						buxn_asm_file_range_t sym_range = focused_symbol->region.range;
+						int sym_lineno = sym_range.start.line;
+
+						// Search downward in lines for a line with at least a
+						// symbol whose start address is after the focused address
+						source_line_t* line = NULL;
+						for (int i = sym_lineno + 1; i <= (int)barray_len(source.lines); ++i) {
+							source_line_t* candidate_line = &source.lines[i - 1];
+							for (int j = 0; j < (int)barray_len(candidate_line->symbols); ++j) {
+								if (candidate_line->symbols[j]->addr_min > ctx->focus_address) {
+									line = candidate_line;
+									break;
+								}
+							}
+
+							if (line != NULL) { break; }
+						}
+
+						// Search within this line for a symbol whose column is
+						// the closest to the focused symbol
+						const buxn_dbg_sym_t* next_sym = NULL;
+						if (line != NULL) {
+							int col_diff = INT_MAX;
+							for (int i = 0; i < (int)barray_len(line->symbols); ++i) {
+								const buxn_dbg_sym_t* candidate_sym = line->symbols[i];
+								int candidate_col_diff = abs(
+									candidate_sym->region.range.start.col - sym_range.start.col
+								);
+								if (candidate_col_diff < col_diff) {
+									next_sym = candidate_sym;
+									col_diff = candidate_col_diff;
+								}
+							}
+						}
+
+						if (next_sym != NULL) {
+							focused_symbol = next_sym;
+						}
+					}
+					break;
+				case BUXN_TUI_MOVE_TO_LINE_START:
+					if (focused_symbol != NULL && source.lines != NULL) {
+						buxn_asm_file_range_t sym_range = focused_symbol->region.range;
+						int sym_lineno = sym_range.start.line;
+						barray(const buxn_dbg_sym_t*) line_syms = source.lines[sym_lineno - 1].symbols;
+						focused_symbol = line_syms[0];
+					}
+					break;
+				case BUXN_TUI_MOVE_TO_LINE_END:
+					if (focused_symbol != NULL && source.lines != NULL) {
+						buxn_asm_file_range_t sym_range = focused_symbol->region.range;
+						int sym_lineno = sym_range.start.line;
+						barray(const buxn_dbg_sym_t*) line_syms = source.lines[sym_lineno - 1].symbols;
+						focused_symbol = line_syms[barray_len(line_syms) - 1];
+					}
+					break;
 				case BUXN_TUI_QUIT:
 					should_run = false;
 					break;
 				default:
 					break;
 			}
+		}
+
+		if (focused_symbol != old_focused_symbol) {
+			ctx->focus_address = focused_symbol->addr_min;
+			buxn_dbg_client_send(ctx->client, (buxn_dbgx_msg_t){
+				.type = BUXN_DBGX_MSG_SET_FOCUS,
+				.set_focus = {
+					.address = focused_symbol->addr_min,
+				},
+			});
 		}
 	}
 
@@ -293,6 +444,7 @@ bio_main(void* userdata) {
 
 	tui_ctx_t ui_ctx = {
 		.main_mailbox = mailbox,
+		.client = client,
 		.symtab = symtab,
 		.source_set = &source_set,
 		.focus_address = info.focus,
@@ -367,6 +519,20 @@ bio_main(void* userdata) {
 					barray_push(src.lines, current_line, NULL);
 				}
 
+				// Index all symbols to line
+				int num_lines = barray_len(src.lines);
+				for (int i = 0; i < symtab->num_symbols; ++i) {
+					const buxn_dbg_sym_t* symbol = &symtab->symbols[i];
+					int symbol_line = symbol->region.range.start.line;
+					if (
+						symbol->region.filename == msg.load_source.name
+						&& symbol_line  <= num_lines
+					) {
+						source_line_t* line = &src.lines[symbol_line - 1];
+						barray_push(line->symbols, symbol, NULL);
+					}
+				}
+
 				// Commit
 				bhash_put(&source_set, msg.load_source.name, src);
 				buxn_tui_refresh(tui);
@@ -385,7 +551,11 @@ end:
 
 	bhash_index_t num_sources = bhash_len(&source_set);
 	for (bhash_index_t i = 0; i < num_sources; ++i) {
-		barray_free(NULL, source_set.values[i].lines);
+		barray(source_line_t) lines = source_set.values[i].lines;
+		for (int i = 0; i < (int)barray_len(lines); ++i) {
+			barray_free(NULL, lines[i].symbols);
+		}
+		barray_free(NULL, lines);
 	}
 	bhash_cleanup(&source_set);
 
