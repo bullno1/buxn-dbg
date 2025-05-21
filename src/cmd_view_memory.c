@@ -4,11 +4,22 @@
 #include "logger.h"
 #include "tui.h"
 #include "symbol.h"
+#include <buxn/vm/opcodes.h>
 #include <bio/mailbox.h>
 
-#define NUM_HEADER_LINES 2
+#define NUM_HEADER_LINES 1
 #define NUM_SPACES_PER_BYTE 3  // A space and 2 nibbles
 #define BYTE_CHUNK_SIZE 2  // Always display each line as a group of 2 bytes
+
+#define DEFINE_OPCODE_NAME(NAME, VALUE) \
+	[VALUE] = STRINGIFY(NAME),
+
+#define STRINGIFY(X) STRINGIFY2(X)
+#define STRINGIFY2(X) #X
+
+static const char* opcode_names[256] = {
+	BUXN_OPCODE_DISPATCH(DEFINE_OPCODE_NAME)
+};
 
 typedef struct {
 	buxn_dbg_transport_info_t connect_transport;
@@ -89,7 +100,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			top_line = focus_line;
 		}
 
-		int bottom_line = top_line + height - NUM_HEADER_LINES - 1;
+		int bottom_line = top_line + height - NUM_HEADER_LINES - 1 - 1;
 		if (focus_line > bottom_line) {
 			int movement = focus_line - bottom_line;
 			top_line += movement;
@@ -124,6 +135,9 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 		int loaded_start_addr = (int)view_buffer.loaded_start_address;
 		int loaded_end_addr = (int)view_buffer.loaded_end_address;
 		int symbol_index_hint = 0;
+		const buxn_dbg_sym_t* focused_symbol = NULL;
+		uint8_t focused_byte = 0;
+		bool focused_byte_is_known = false;
 		for (int address = start_address; address < end_address; ++address) {
 			int x = (address % num_bytes_per_row) * NUM_SPACES_PER_BYTE;
 			int y = (address / num_bytes_per_row) - top_line + NUM_HEADER_LINES;
@@ -133,6 +147,10 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				symbol = buxn_dbg_find_symbol(
 					ctx->symtab, (uint16_t)address, &symbol_index_hint
 				);
+
+				if (address == focus_address) {
+					focused_symbol = symbol;
+				}
 			}
 
 			uintattr_t background = TB_DEFAULT;
@@ -157,10 +175,55 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 			if (loaded_start_addr <= address && address < loaded_end_addr) {
 				uint8_t byte = view_buffer.buffer[address - loaded_start_addr];
+				if (address == focus_address) {
+					focused_byte = byte;
+					focused_byte_is_known = true;
+				}
+
 				tb_printf(x, y, foreground, background, "%02x", byte);
 			} else {
 				tb_printf(x, y, foreground, background, "??");
 			}
+		}
+
+		if (focused_symbol != NULL) {
+			// Print type
+			const char* type = "Unknown";
+			switch (focused_symbol->type) {
+				case BUXN_DBG_SYM_OPCODE:
+					type = "opcode";
+					break;
+				case BUXN_DBG_SYM_TEXT:
+					type = "text";
+					break;
+				case BUXN_DBG_SYM_NUMBER:
+					type = "number";
+					break;
+				case BUXN_DBG_SYM_LABEL_REF:
+					type = "label";
+					break;
+			}
+			if (focused_symbol->type == BUXN_DBG_SYM_OPCODE) {
+				if (focused_byte_is_known) {
+					tb_printf(0, 0, TB_WHITE, TB_DEFAULT, "Type: %s (%s)", type, opcode_names[focused_byte]);
+				} else {
+					tb_printf(0, 0, TB_WHITE, TB_DEFAULT, "Type: %s", type);
+				}
+			} else {
+				tb_printf(0, 0, TB_WHITE, TB_DEFAULT, "Type: %s", type);
+			}
+
+			// Print source location
+			const buxn_asm_source_region_t* region = &focused_symbol->region;
+			buxn_tui_status_line(
+				"[0x%04x] %s (%d:%d:%d - %d:%d:%d)",
+				focus_address,
+				region->filename,
+				region->range.start.line, region->range.start.col, region->range.start.byte,
+				region->range.end.line, region->range.end.col, region->range.end.byte
+			);
+		} else {
+			buxn_tui_status_line("[0x%04x]", focus_address);
 		}
 
 		bio_tb_present();

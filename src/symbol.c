@@ -38,15 +38,22 @@ buxn_dbg_load_symbols(const char* path) {
 		}
 	}
 
+	symtab->bserial_mem = bserial_mem;
 end:
-	buxn_dbg_free(bserial_mem);
+	if (symtab == NULL) {
+		buxn_dbg_free(bserial_mem);
+	}
+
 	bio_fclose(dbg_file, NULL);
 	return symtab;
 }
 
 void
 buxn_dbg_unload_symbols(buxn_dbg_symtab_t* symtab) {
-	buxn_dbg_free(symtab);
+	if (symtab != NULL) {
+		buxn_dbg_free(symtab->bserial_mem);
+		buxn_dbg_free(symtab);
+	}
 }
 
 const buxn_dbg_sym_t*

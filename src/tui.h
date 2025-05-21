@@ -93,4 +93,9 @@ buxn_tui_refresh(buxn_tui_t ui);
 buxn_tui_event_type_t
 buxn_tui_handle_event(const struct tb_event* event);
 
+// Common UI elements
+BIO_FORMAT_ATTRIBUTE(1, 2)
+void
+buxn_tui_status_line(const char* fmt, ...);
+
 #endif

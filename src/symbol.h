@@ -4,6 +4,7 @@
 #include <buxn/dbg/symbol.h>
 
 typedef struct {
+	void* bserial_mem;
 	int num_symbols;
 	buxn_dbg_sym_t symbols[];
 } buxn_dbg_symtab_t;
