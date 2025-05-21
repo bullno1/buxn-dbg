@@ -199,6 +199,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				case BUXN_DBG_SYM_NUMBER:
 					type = "number";
 					break;
+				case BUXN_DBG_SYM_LABEL:
 				case BUXN_DBG_SYM_LABEL_REF:
 					type = "label";
 					break;

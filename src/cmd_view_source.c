@@ -130,6 +130,8 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 					foreground = TB_RED;
 				} else if (symbol->type == BUXN_DBG_SYM_LABEL_REF) {
 					foreground = TB_YELLOW;
+				} else if (symbol->type == BUXN_DBG_SYM_LABEL) {
+					foreground = TB_WHITE | TB_BOLD;
 				}
 
 				int x = range->start.col - 1;
