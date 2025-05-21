@@ -2,7 +2,7 @@
 #include "common.h"
 #include "client.h"
 #include "logger.h"
-#include "bio_termbox2.h"
+#include "tui.h"
 #include <bio/mailbox.h>
 
 typedef struct {
@@ -11,13 +11,42 @@ typedef struct {
 	const char* src_dir;
 } args_t;
 
-typedef BIO_MAILBOX(struct tb_event) mailbox_t;
+typedef enum {
+	MSG_REQUEST_REFRESH,
+	MSG_QUIT,
+} msg_type_t;
+
+typedef struct {
+	msg_type_t type;
+} msg_t;
+
+typedef BIO_MAILBOX(msg_t) mailbox_t;
+
+typedef struct {
+	mailbox_t main_mailbox;
+} tui_ctx_t;
 
 static void
-bio_tb_callback(void* userdata, const struct tb_event* event) {
-	mailbox_t mailbox = *(mailbox_t*)userdata;
-	struct tb_event ev = *event;
-	bio_wait_and_send_message(bio_tb_is_running(), mailbox, ev);
+tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
+	tui_ctx_t* ctx = userdata;
+
+	bool should_run = true;
+	while (bio_is_mailbox_open(mailbox) && should_run) {
+		tb_clear();
+		bio_tb_present();
+
+		buxn_tui_loop(msg, mailbox) {
+			switch (buxn_tui_handle_event(&msg)) {
+				case BUXN_TUI_QUIT:
+					should_run = false;
+					break;
+				default:
+					break;
+			}
+		}
+	}
+
+	bio_wait_and_send_message(true, ctx->main_mailbox, (msg_t){ .type = MSG_QUIT });
 }
 
 static int
@@ -37,32 +66,24 @@ bio_main(void* userdata) {
 	mailbox_t mailbox;
 	bio_open_mailbox(&mailbox, 8);
 
-	bio_tb_init(&(bio_tb_options_t){
-		.userdata = &mailbox,
-		.event_callback = bio_tb_callback,
-	});
+	tui_ctx_t ctx = {
+		.main_mailbox = mailbox,
+	};
+	buxn_tui_t tui = buxn_tui_start(tui_entry, &ctx);
 
-	bool should_run = true;
-	while (should_run) {
-		tb_clear();
-		bio_tb_present();
-
-		bio_tb_foreach_message(event, mailbox) {
-			if (event.type == TB_EVENT_KEY) {
-				if (
-					event.key == TB_KEY_CTRL_C
-					|| event.key == TB_KEY_ESC
-					|| event.ch == 'q'
-				) {
-					should_run = false;
-				}
-			}
+	bio_foreach_message(msg, mailbox) {
+		switch (msg.type) {
+			case MSG_REQUEST_REFRESH:
+				break;
+			case MSG_QUIT:
+				goto end;
 		}
 	}
+end:
 
-	bio_tb_shutdown();
+	buxn_tui_stop(tui);
+
 	bio_close_mailbox(mailbox);
-
 	buxn_dbg_stop_client(client);
 	return 0;
 }

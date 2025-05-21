@@ -14,6 +14,7 @@ set(SOURCES
 	"client.c"
 	"logger.c"
 	"bio_termbox2.c"
+	"tui.c"
 	"libs.c"
 )
 add_executable(buxn-dbg ${SOURCES})
