@@ -323,6 +323,7 @@ bio_main(void* userdata) {
 
 				// if the new address range overlaps the existing one, we don't
 				// have to load everything
+				bio_call_status_t load_status = BIO_CALL_OK;
 				int loaded_start_addr = (int)view_buffer->loaded_start_address;
 				int loaded_end_addr = (int)view_buffer->loaded_end_address;
 				if (
@@ -342,7 +343,7 @@ bio_main(void* userdata) {
 						(size_t)reuse_size
 					);
 					if (load_size > 0) {
-						vm_mem_read(
+						load_status = vm_mem_read(
 							client,
 							reuse_end_addr, load_size,
 							&load_buffer[reuse_end_addr - requested_start_addr]
@@ -365,20 +366,22 @@ bio_main(void* userdata) {
 						(size_t)reuse_size
 					);
 					if (load_size > 0) {
-						vm_mem_read(
+						load_status = vm_mem_read(
 							client,
 							requested_start_addr, load_size,
 							load_buffer
 						);
 					}
 				} else {
-					vm_mem_read(
+					load_status = vm_mem_read(
 						client,
 						requested_start_addr,
 						requested_end_addr - requested_start_addr,
 						load_buffer
 					);
 				}
+
+				if (load_status != BIO_CALL_OK) { goto end; }
 
 				// Swap the buffers
 				{
