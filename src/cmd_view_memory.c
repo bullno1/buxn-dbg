@@ -170,7 +170,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 			if (address == focus_address) {
 				background = TB_WHITE;
-				foreground |= TB_REVERSE;
+				foreground = TB_BLACK | TB_BOLD;
 			}
 
 			if (loaded_start_addr <= address && address < loaded_end_addr) {
