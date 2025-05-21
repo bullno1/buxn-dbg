@@ -49,7 +49,7 @@ buxn_tui_stop(buxn_tui_t ui) {
 void
 buxn_tui_refresh(buxn_tui_t ui) {
 	struct tb_event event = { 0 };
-	bio_send_message(ui.mailbox, event);
+	bio_wait_and_send_message(true, ui.mailbox, event);
 }
 
 buxn_tui_event_type_t
