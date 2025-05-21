@@ -64,6 +64,7 @@ typedef struct {
 	const buxn_dbg_symtab_t* symtab;
 	buxn_dbg_client_t client;
 	int focus_address;
+	int pc;
 } tui_ctx_t;
 
 static bio_call_status_t
@@ -174,6 +175,11 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				foreground = TB_YELLOW;
 			} else if (symbol->type == BUXN_DBG_SYM_LABEL) {
 				foreground = TB_DEFAULT | TB_BOLD;
+			}
+
+			if (address == ctx->pc) {
+				background = TB_GREEN;
+				foreground = TB_BLACK | TB_BOLD;
 			}
 
 			if (address == ctx->focus_address) {
@@ -345,6 +351,7 @@ bio_main(void* userdata) {
 		.symtab = symtab,
 		.client = client,
 		.focus_address = (int)info.focus,
+		.pc = (int)info.pc,
 	};
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
 

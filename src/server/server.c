@@ -363,6 +363,7 @@ buxn_dbg_vm_notify(buxn_dbg_vm_controller_t* controller, buxn_dbg_msg_t msg) {
 		case BUXN_DBG_MSG_BEGIN_EXEC:
 			controller->info.vm_executing = true;
 			controller->info.vector_addr = msg.addr;
+			controller->info.pc = msg.addr;
 			break;
 		case BUXN_DBG_MSG_END_EXEC:
 			controller->info.vm_executing = false;

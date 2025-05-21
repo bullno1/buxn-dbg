@@ -57,6 +57,7 @@ typedef struct {
 	const buxn_dbg_symtab_t* symtab;
 	source_set_t* source_set;
 	uint16_t focus_address;
+	uint16_t pc;
 } tui_ctx_t;
 
 static void
@@ -69,6 +70,9 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	bool should_run = true;
 	const buxn_dbg_sym_t* focused_symbol = buxn_dbg_find_symbol(
 		ctx->symtab, ctx->focus_address, NULL
+	);
+	const buxn_dbg_sym_t* pc_symbol = buxn_dbg_find_symbol(
+		ctx->symtab, ctx->pc, NULL
 	);
 	while (bio_is_mailbox_open(mailbox) && should_run) {
 		tb_clear();
@@ -165,6 +169,21 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				}
 
 				if (
+					pc_symbol != NULL
+					&& (
+						symbol == pc_symbol
+						|| (
+							symbol->region.filename == pc_symbol->region.filename
+							&& symbol->region.range.start.byte == pc_symbol->region.range.start.byte
+							&& symbol->region.range.end.byte == pc_symbol->region.range.end.byte
+						)
+					)
+				) {
+					background = TB_GREEN;
+					foreground = TB_BLACK | TB_BOLD;
+				}
+
+				if (
 					focused_symbol != NULL
 					&& (
 						symbol == focused_symbol
@@ -175,8 +194,8 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 						)
 					)
 				) {
-					foreground = TB_BLACK;
 					background = TB_WHITE;
+					foreground = TB_BLACK | TB_BOLD;
 				}
 
 				int x = range->start.col - 1;
@@ -464,6 +483,7 @@ bio_main(void* userdata) {
 		.symtab = symtab,
 		.source_set = &source_set,
 		.focus_address = info.focus,
+		.pc = info.pc,
 	};
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
 

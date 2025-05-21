@@ -16,6 +16,7 @@ typedef enum {
 
 typedef struct {
 	uint16_t vector_addr;
+	uint16_t pc;
 	uint8_t brkp_id;
 	bool vm_executing;
 	bool vm_paused;

@@ -102,6 +102,9 @@ buxn_dbgx_protocol_msg_body(
 				BSERIAL_KEY(ctx, "vector_addr") {
 					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->info->vector_addr));
 				}
+				BSERIAL_KEY(ctx, "pc") {
+					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->info->pc));
+				}
 				BSERIAL_KEY(ctx, "brkp_id") {
 					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->info->brkp_id));
 				}
