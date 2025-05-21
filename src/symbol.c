@@ -65,22 +65,46 @@ buxn_dbg_find_symbol(
 	int default_index_hint = 0;
 	if (index_hint == NULL) { index_hint = &default_index_hint; }
 
+	// One location can map to multiple labels.
+	// First, only consider non-labels
 	int index = *index_hint;
+	const buxn_dbg_sym_t* symbol = NULL;
+	for (; index < symtab->num_symbols; ++index) {
+		if (symtab->symbols[index].type == BUXN_DBG_SYM_LABEL) { continue; }
+		if (
+			symtab->symbols[index].addr_min <= address
+			&& address <= symtab->symbols[index].addr_max
+		) {
+			symbol =  &symtab->symbols[index];
+			break;
+		}
+
+		if (symtab->symbols[index].addr_min > address) {
+			break;
+		}
+	}
+
+	if (symbol != NULL) {
+		*index_hint = index;
+		return symbol;
+	}
+
+	// Then, map it to the first label we can find
+	index = *index_hint;
 	for (; index < symtab->num_symbols; ++index) {
 		if (
 			symtab->symbols[index].addr_min <= address
 			&& address <= symtab->symbols[index].addr_max
 		) {
-			*index_hint = index;
-			return &symtab->symbols[index];
+			symbol =  &symtab->symbols[index];
+			break;
 		}
 
 		if (symtab->symbols[index].addr_min > address) {
-			*index_hint = index;
-			return NULL;
+			break;
 		}
 	}
 
 	*index_hint = index;
-	return NULL;
+	return symbol;
 }
