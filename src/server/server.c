@@ -25,7 +25,6 @@ typedef struct {
 
 		struct {
 			int client_id;
-			buxn_dbgx_focus_type_t type;
 			uint16_t address;
 		} set_focus;
 
@@ -315,14 +314,11 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 				}
 			} break;
 			case SERVER_MSG_SET_FOCUS: {
-				if (msg.set_focus.type == BUXN_DBGX_FOCUS_JUMP) {
 					vm_controller.info.focus = msg.set_focus.address;
-				}
 
 				buxn_dbgx_msg_t notification = {
 					.type = BUXN_DBGX_MSG_SET_FOCUS,
 					.set_focus = {
-						.type = msg.set_focus.type,
 						.address = msg.set_focus.address,
 					},
 				};
@@ -445,7 +441,6 @@ buxn_dbg_client_request(buxn_dbg_client_controller_t* controller, buxn_dbgx_msg_
 				.type = SERVER_MSG_SET_FOCUS,
 				.set_focus = {
 					.client_id = controller->id,
-					.type = msg.set_focus.type,
 					.address = msg.set_focus.address,
 				},
 			};

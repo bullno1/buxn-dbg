@@ -269,7 +269,6 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			buxn_dbg_client_send(ctx->client, (buxn_dbgx_msg_t){
 				.type = BUXN_DBGX_MSG_SET_FOCUS,
 				.set_focus = {
-					.type = BUXN_DBGX_FOCUS_HOVER,
 					.address = focus_address,
 				},
 			});

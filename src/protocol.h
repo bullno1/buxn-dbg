@@ -26,11 +26,6 @@ typedef struct {
 	const char* client_name;
 } buxn_dbgx_init_t;
 
-typedef enum {
-	BUXN_DBGX_FOCUS_HOVER,
-	BUXN_DBGX_FOCUS_JUMP,
-} buxn_dbgx_focus_type_t;
-
 typedef struct {
 	buxn_dbgx_msg_type_t type;
 	union {
@@ -47,7 +42,6 @@ typedef struct {
 		} log;
 
 		struct {
-			buxn_dbgx_focus_type_t type;
 			uint16_t address;
 		} set_focus;
 	};

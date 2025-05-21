@@ -43,7 +43,6 @@ typedef struct {
 		} load_source;
 
 		struct {
-			buxn_dbgx_focus_type_t type;
 			uint16_t address;
 		} set_focus;
 	};
@@ -55,7 +54,6 @@ typedef struct {
 	mailbox_t main_mailbox;
 	const buxn_dbg_symtab_t* symtab;
 	source_set_t* source_set;
-	uint16_t hover_address;
 	uint16_t focus_address;
 } tui_ctx_t;
 
@@ -69,20 +67,24 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	/*int focus_column = 1;*/
 
 	bool should_run = true;
+	const buxn_dbg_sym_t* focused_symbol = buxn_dbg_find_symbol(
+		ctx->symtab, ctx->focus_address, NULL
+	);
 	while (bio_is_mailbox_open(mailbox) && should_run) {
 		tb_clear();
 
 		/*int width = tb_width();*/
 		int height = tb_height();
 
-		const buxn_dbg_sym_t* hovered_symbol = buxn_dbg_find_symbol(
-			ctx->symtab, ctx->hover_address, NULL
-		);
-		const buxn_dbg_sym_t* focused_symbol = buxn_dbg_find_symbol(
+		const buxn_dbg_sym_t* new_focused_symbol = buxn_dbg_find_symbol(
 			ctx->symtab, ctx->focus_address, NULL
 		);
-		if (hovered_symbol != NULL) {
-			focus_line = hovered_symbol->region.range.start.line;
+		if (new_focused_symbol != NULL) {
+			focused_symbol = new_focused_symbol;
+		}
+
+		if (focused_symbol != NULL) {
+			focus_line = focused_symbol->region.range.start.line;
 		}
 
 		const char* focused_filename = NULL;
@@ -159,13 +161,13 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				}
 
 				if (
-					hovered_symbol != NULL
+					focused_symbol != NULL
 					&& (
-						symbol == hovered_symbol
+						symbol == focused_symbol
 						|| (
-							symbol->region.filename == hovered_symbol->region.filename
-							&& symbol->region.range.start.byte == hovered_symbol->region.range.start.byte
-							&& symbol->region.range.end.byte == hovered_symbol->region.range.end.byte
+							symbol->region.filename == focused_symbol->region.filename
+							&& symbol->region.range.start.byte == focused_symbol->region.range.start.byte
+							&& symbol->region.range.end.byte == focused_symbol->region.range.end.byte
 						)
 					)
 				) {
@@ -239,7 +241,6 @@ handle_notification(buxn_dbgx_msg_t msg, void* userdata) {
 		msg_t msg_to_main = {
 			.type = MSG_SET_FOCUS,
 			.set_focus = {
-				.type = msg.set_focus.type,
 				.address = msg.set_focus.address,
 			},
 		};
@@ -295,7 +296,6 @@ bio_main(void* userdata) {
 		.symtab = symtab,
 		.source_set = &source_set,
 		.focus_address = info.focus,
-		.hover_address = info.focus,
 	};
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
 
@@ -372,11 +372,7 @@ bio_main(void* userdata) {
 				buxn_tui_refresh(tui);
 			} break;
 			case MSG_SET_FOCUS: {
-				if (msg.set_focus.type == BUXN_DBGX_FOCUS_JUMP) {
-					ui_ctx.focus_address = msg.set_focus.address;
-				} else {
-					ui_ctx.hover_address = msg.set_focus.address;
-				}
+				ui_ctx.focus_address = msg.set_focus.address;
 				buxn_tui_refresh(tui);
 			} break;
 			case MSG_QUIT:
