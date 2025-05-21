@@ -37,6 +37,7 @@ typedef struct {
 
 typedef enum {
 	MSG_REQUEST_REFRESH,
+	MSG_SET_FOCUS,
 	MSG_QUIT,
 } msg_type_t;
 
@@ -49,6 +50,10 @@ typedef struct {
 			uint16_t end_address;
 			view_buffer_t* view_buffer;
 		} refresh;
+
+		struct {
+			uint16_t address;
+		} set_focus;
 	};
 } msg_t;
 
@@ -58,6 +63,7 @@ typedef struct {
 	mailbox_t main_mailbox;
 	const buxn_dbg_symtab_t* symtab;
 	buxn_dbg_client_t client;
+	int focus_address;
 } tui_ctx_t;
 
 static bio_call_status_t
@@ -83,7 +89,6 @@ static void
 tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	tui_ctx_t* ctx = userdata;
 
-	int focus_address = 0x0100;  // reset vector
 	int top_line = 0;
 	view_buffer_t view_buffer = { 0 };
 
@@ -96,7 +101,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 		int num_bytes_per_row = (width / NUM_SPACES_PER_BYTE) / BYTE_CHUNK_SIZE * BYTE_CHUNK_SIZE;
 
-		int focus_line = focus_address / num_bytes_per_row;
+		int focus_line = ctx->focus_address / num_bytes_per_row;
 		if (focus_line < top_line) {
 			top_line = focus_line;
 		}
@@ -149,7 +154,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 					ctx->symtab, (uint16_t)address, &symbol_index_hint
 				);
 
-				if (address == focus_address) {
+				if (address == ctx->focus_address) {
 					focused_symbol = symbol;
 				}
 			}
@@ -171,14 +176,14 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				foreground = TB_DEFAULT | TB_BOLD;
 			}
 
-			if (address == focus_address) {
+			if (address == ctx->focus_address) {
 				background = TB_WHITE;
 				foreground = TB_BLACK | TB_BOLD;
 			}
 
 			if (loaded_start_addr <= address && address < loaded_end_addr) {
 				uint8_t byte = view_buffer.buffer[address - loaded_start_addr];
-				if (address == focus_address) {
+				if (address == ctx->focus_address) {
 					focused_byte = byte;
 					focused_byte_is_known = true;
 				}
@@ -221,55 +226,59 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			const buxn_asm_source_region_t* region = &focused_symbol->region;
 			buxn_tui_status_line(
 				"[0x%04x] %s (%d:%d:%d - %d:%d:%d)",
-				focus_address,
+				ctx->focus_address,
 				region->filename,
 				region->range.start.line, region->range.start.col, region->range.start.byte,
 				region->range.end.line, region->range.end.col, region->range.end.byte
 			);
 		} else {
-			buxn_tui_status_line("[0x%04x]", focus_address);
+			buxn_tui_status_line("[0x%04x]", ctx->focus_address);
 		}
 
 		bio_tb_present();
 
-		int old_focus = focus_address;
+		int old_focus = ctx->focus_address;
 		buxn_tui_loop(msg, mailbox) {
 			switch (buxn_tui_handle_event(&msg)) {
 				case BUXN_TUI_QUIT:
 					should_run = false;
 					break;
 				case BUXN_TUI_MOVE_UP:
-					focus_address -= num_bytes_per_row;
-					if (focus_address < 0) { focus_address = 0; }
+					ctx->focus_address -= num_bytes_per_row;
+					if (ctx->focus_address < 0) { ctx->focus_address = 0; }
 					break;
 				case BUXN_TUI_MOVE_DOWN:
-					focus_address += num_bytes_per_row;
-					if (focus_address > UINT16_MAX) { focus_address = UINT16_MAX; }
+					ctx->focus_address += num_bytes_per_row;
+					if (ctx->focus_address > UINT16_MAX) {
+						ctx->focus_address = UINT16_MAX;
+					}
 					break;
 				case BUXN_TUI_MOVE_LEFT:
-					focus_address -= 1;
-					if (focus_address < 0) { focus_address = 0; }
+					ctx->focus_address -= 1;
+					if (ctx->focus_address < 0) { ctx->focus_address = 0; }
 					break;
 				case BUXN_TUI_MOVE_RIGHT:
-					focus_address += 1;
-					if (focus_address > UINT16_MAX) { focus_address = UINT16_MAX; }
+					ctx->focus_address += 1;
+					if (ctx->focus_address > UINT16_MAX) {
+						ctx->focus_address = UINT16_MAX;
+					}
 					break;
 				case BUXN_TUI_MOVE_TO_LINE_START:
-					focus_address = focus_line * num_bytes_per_row;
+					ctx->focus_address = focus_line * num_bytes_per_row;
 					break;
 				case BUXN_TUI_MOVE_TO_LINE_END:
-					focus_address = (focus_line + 1) * num_bytes_per_row - 1;
+					ctx->focus_address = (focus_line + 1) * num_bytes_per_row - 1;
 					break;
 				default:
 					break;
 			}
 		}
 
-		if (focus_address != old_focus) {
+		if (ctx->focus_address != old_focus) {
 			buxn_dbg_client_send(ctx->client, (buxn_dbgx_msg_t){
 				.type = BUXN_DBGX_MSG_SET_FOCUS,
 				.set_focus = {
-					.address = focus_address,
+					.address = ctx->focus_address,
 				},
 			});
 		}
@@ -279,19 +288,49 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	buxn_dbg_free(view_buffer.buffer);
 }
 
+static void
+handle_notification(buxn_dbgx_msg_t msg, void* userdata) {
+	mailbox_t mailbox = *(mailbox_t*)userdata;
+	if (msg.type == BUXN_DBGX_MSG_SET_FOCUS) {
+		msg_t msg_to_main = {
+			.type = MSG_SET_FOCUS,
+			.set_focus = {
+				.address = msg.set_focus.address,
+			},
+		};
+		bio_wait_and_send_message(true, mailbox, msg_to_main);
+	}
+}
+
 static int
 bio_main(void* userdata) {
 	args_t* args = userdata;
 
+	mailbox_t mailbox;
+	bio_open_mailbox(&mailbox, 8);
+
 	buxn_dbg_client_t client;
-	if (!buxn_dbg_make_client(
+	if (!buxn_dbg_make_client_ex(
 		&client,
 		&args->connect_transport,
+		&(buxn_dbg_client_args_t){
+			.userdata = &mailbox,
+			.msg_handler = handle_notification,
+		},
 		&(buxn_dbgx_init_t){ .client_name = "view:memory" }
 	)) {
 		return 1;
 	}
 	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, client));
+
+	buxn_dbgx_info_t info = { 0 };
+	bio_call_status_t status = buxn_dbg_client_send(client, (buxn_dbgx_msg_t){
+		.type = BUXN_DBGX_MSG_INFO_REQ,
+		.info = &info,
+	});
+	if (status != BIO_CALL_OK) {
+		return 1;
+	}
 
 	buxn_dbg_symtab_t* symtab = NULL;
 	if (args->dbg_filename != NULL) {
@@ -301,13 +340,11 @@ bio_main(void* userdata) {
 		BIO_WARN("Semantic highlighting will not be available");
 	}
 
-	mailbox_t mailbox;
-	bio_open_mailbox(&mailbox, 8);
-
 	tui_ctx_t ui_ctx = {
 		.main_mailbox = mailbox,
 		.symtab = symtab,
 		.client = client,
+		.focus_address = (int)info.focus,
 	};
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
 
@@ -410,6 +447,10 @@ bio_main(void* userdata) {
 				view_buffer->loaded_end_address = requested_end_addr;
 				buxn_tui_refresh(tui);
 			} break;
+			case MSG_SET_FOCUS:
+				ui_ctx.focus_address = (int)msg.set_focus.address;
+				buxn_tui_refresh(tui);
+				break;
 			case MSG_QUIT:
 				goto end;
 		}
