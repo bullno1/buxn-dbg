@@ -3,16 +3,16 @@
 #include "client.h"
 #include "logger.h"
 #include "tui.h"
+#include "symbol.h"
 #include <bio/mailbox.h>
 
-#define NUM_HEADER_LINES 3
+#define NUM_HEADER_LINES 2
 #define NUM_SPACES_PER_BYTE 3  // A space and 2 nibbles
 #define BYTE_CHUNK_SIZE 2  // Always display each line as a group of 2 bytes
 
 typedef struct {
 	buxn_dbg_transport_info_t connect_transport;
 	const char* dbg_filename;
-	const char* src_dir;
 } args_t;
 
 typedef struct {
@@ -45,6 +45,7 @@ typedef BIO_MAILBOX(msg_t) mailbox_t;
 
 typedef struct {
 	mailbox_t main_mailbox;
+	const buxn_dbg_symtab_t* symtab;
 } tui_ctx_t;
 
 static bio_call_status_t
@@ -122,16 +123,38 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 		// Render based on what we have
 		int loaded_start_addr = (int)view_buffer.loaded_start_address;
 		int loaded_end_addr = (int)view_buffer.loaded_end_address;
+		int symbol_index_hint = 0;
 		for (int address = start_address; address < end_address; ++address) {
 			int x = (address % num_bytes_per_row) * NUM_SPACES_PER_BYTE;
 			int y = (address / num_bytes_per_row) - top_line + NUM_HEADER_LINES;
 
+			const buxn_dbg_sym_t* symbol = NULL;
+			if (ctx->symtab) {
+				symbol = buxn_dbg_find_symbol(
+					ctx->symtab, (uint16_t)address, &symbol_index_hint
+				);
+			}
+
 			uintattr_t background = TB_DEFAULT;
 			uintattr_t foreground = TB_DEFAULT;
+
+			if (symbol == NULL) {
+				foreground = TB_DEFAULT;
+			} else if (symbol->type == BUXN_DBG_SYM_TEXT) {
+				foreground = TB_GREEN;
+			} else if (symbol->type == BUXN_DBG_SYM_OPCODE) {
+				foreground = TB_CYAN;
+			} else if (symbol->type == BUXN_DBG_SYM_NUMBER) {
+				foreground = TB_RED;
+			} else if (symbol->type == BUXN_DBG_SYM_LABEL_REF) {
+				foreground = TB_YELLOW;
+			}
+
 			if (address == focus_address) {
 				background = TB_WHITE;
 				foreground |= TB_REVERSE;
 			}
+
 			if (loaded_start_addr <= address && address < loaded_end_addr) {
 				uint8_t byte = view_buffer.buffer[address - loaded_start_addr];
 				tb_printf(x, y, foreground, background, "%02x", byte);
@@ -193,11 +216,20 @@ bio_main(void* userdata) {
 	}
 	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, client));
 
+	buxn_dbg_symtab_t* symtab = NULL;
+	if (args->dbg_filename != NULL) {
+		symtab = buxn_dbg_load_symbols(args->dbg_filename);
+	}
+	if (symtab == NULL) {
+		BIO_WARN("Semantic highlighting will not be available");
+	}
+
 	mailbox_t mailbox;
 	bio_open_mailbox(&mailbox, 8);
 
 	tui_ctx_t ui_ctx = {
 		.main_mailbox = mailbox,
+		.symtab = symtab,
 	};
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
 
@@ -304,6 +336,7 @@ bio_main(void* userdata) {
 end:
 
 	buxn_tui_stop(tui);
+	buxn_dbg_unload_symbols(symtab);
 	buxn_dbg_free(load_buffer);
 
 	bio_close_mailbox(mailbox);
@@ -312,7 +345,7 @@ end:
 }
 
 BUXN_DBG_CMD_EX(view_memory, "view:memory", "Show a hex dump of memory") {
-	args_t args;
+	args_t args = { 0 };
 	buxn_dbg_parse_transport("abstract-connect:buxn/dbg", &args.connect_transport);
 
 	barg_opt_t opts[] = {
@@ -323,6 +356,15 @@ BUXN_DBG_CMD_EX(view_memory, "view:memory", "Show a hex dump of memory") {
 			.parser = barg_transport(&args.connect_transport),
 			.summary = "How to connect to the debug server",
 			.description = CONNECT_TRANSPORT_OPT_DESC,
+		},
+		{
+			.name = "dbg-file",
+			.short_name = 'd',
+			.value_name = "path",
+			.parser = barg_str(&args.dbg_filename),
+			.summary = "Path to the .rom.dbg file",
+			.description =
+				"If not specified, bytes will not be semantically highlighted.",
 		},
 		barg_opt_hidden_help(),
 	};
