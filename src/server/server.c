@@ -420,6 +420,7 @@ void
 buxn_dbg_client_terminated(buxn_dbg_client_controller_t* controller) {
 	server_msg_t msg_to_server = {
 		.type = SERVER_MSG_CLIENT_TERMINATED,
+		.client_terminated.id = controller->id,
 	};
 	bio_wait_and_send_message(true, controller->shared_ctx->server_mailbox, msg_to_server);
 }
