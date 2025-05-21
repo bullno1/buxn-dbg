@@ -64,9 +64,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	tui_ctx_t* ctx = userdata;
 
 	int top_line = 1;
-	/*int left_column = 1;*/
 	int focus_line = 1;
-	/*int focus_column = 1;*/
 
 	bool should_run = true;
 	const buxn_dbg_sym_t* focused_symbol = buxn_dbg_find_symbol(
@@ -75,8 +73,9 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	while (bio_is_mailbox_open(mailbox) && should_run) {
 		tb_clear();
 
-		/*int width = tb_width();*/
+		int width = tb_width();
 		int height = tb_height();
+		int column_offset = 0;
 
 		const buxn_dbg_sym_t* new_focused_symbol = buxn_dbg_find_symbol(
 			ctx->symtab, ctx->focus_address, NULL
@@ -87,6 +86,10 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 		if (focused_symbol != NULL) {
 			focus_line = focused_symbol->region.range.start.line;
+			// Move right as little as possible to make the entire symbol visible
+			if (focused_symbol->region.range.end.col > width) {
+				column_offset = focused_symbol->region.range.end.col - width;
+			}
 		}
 
 		const char* focused_filename = NULL;
@@ -126,12 +129,15 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			if (line > num_lines) { break; }
 
 			const source_line_t* source_line = &source.lines[line - 1];
-			tb_printf(
-				0, line - top_line,
-				TB_DEFAULT, TB_DEFAULT,
-				"%.*s",
-				source_line->len, source_line->content
-			);
+			if (column_offset < source_line->len) {
+				tb_printf(
+					0, line - top_line,
+					TB_DEFAULT, TB_DEFAULT,
+					"%.*s",
+					source_line->len - column_offset,
+					source_line->content + column_offset
+				);
+			}
 
 			// Semantic highlighting by drawing over the current line
 			for (int i = 0; i < (int)barray_len(source_line->symbols); ++i) {
@@ -175,11 +181,21 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 				int x = range->start.col - 1;
 				int y = range->start.line - top_line;
-				tb_printf(
-					x, y,
-					foreground, background,
-					"%.*s", str_len, str
-				);
+				if (column_offset <= x) {
+					tb_printf(
+						x - column_offset, y,
+						foreground, background,
+						"%.*s", str_len, str
+					);
+				} else if (x + str_len >= column_offset) {
+					tb_printf(
+						0, y,
+						foreground, background,
+						"%.*s",
+						str_len - (column_offset - x),
+						str + (column_offset - x)
+					);
+				}
 			}
 		}
 
@@ -551,11 +567,12 @@ end:
 
 	bhash_index_t num_sources = bhash_len(&source_set);
 	for (bhash_index_t i = 0; i < num_sources; ++i) {
-		barray(source_line_t) lines = source_set.values[i].lines;
-		for (int i = 0; i < (int)barray_len(lines); ++i) {
-			barray_free(NULL, lines[i].symbols);
+		source_t* source = &source_set.values[i];
+		for (int i = 0; i < (int)barray_len(source->lines); ++i) {
+			barray_free(NULL, source->lines[i].symbols);
 		}
-		barray_free(NULL, lines);
+		barray_free(NULL, source->lines);
+		buxn_dbg_free(source->content);
 	}
 	bhash_cleanup(&source_set);
 
