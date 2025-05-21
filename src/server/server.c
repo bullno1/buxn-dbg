@@ -10,6 +10,7 @@ typedef enum {
 	SERVER_MSG_VM_NOTIFICATION,
 	SERVER_MSG_VM_DISCONNECTED,
 	SERVER_MSG_NEW_CLIENT,
+	SERVER_MSG_SET_FOCUS,
 	SERVER_MSG_TERMINATE_CLIENT,
 	SERVER_MSG_CLIENT_TERMINATED,
 } server_msg_type_t;
@@ -21,6 +22,12 @@ typedef struct {
 		struct {
 			int id;
 		} terminate_client;
+
+		struct {
+			int client_id;
+			buxn_dbgx_focus_type_t type;
+			uint16_t address;
+		} set_focus;
 
 		struct {
 			buxn_dbg_msg_t msg;
@@ -81,6 +88,25 @@ acceptor(void* userdata) {
 
 	if (!ctx->should_terminate) {
 		BIO_ERROR("Error in acceptor: " BIO_ERROR_FMT, BIO_ERROR_FMT_ARGS(&error));
+	}
+}
+
+static void
+broadcast_to_clients(
+	buxn_dbg_client_controller_t* clients,
+	buxn_dbgx_msg_t msg,
+	int exclude_client
+) {
+	for (int i = 0; i < MAX_CLIENTS; ++i) {
+		if (clients[i].id != -1 && i != exclude_client) {
+			if (!buxn_dbg_notify_client_async(clients[i].client, msg)) {
+				BIO_WARN(
+					"Client %d takes too long to process messages",
+					i
+				);
+				buxn_dbg_stop_client_handler(clients[i].client);
+			}
+		}
 	}
 }
 
@@ -231,6 +257,7 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 		.server_mailbox = mailbox,
 		.info = {
 			.brkp_id = BUXN_DBG_BRKP_NONE,
+			.focus = 0x0100,
 		},
 	};
 	if (should_run) {
@@ -258,17 +285,7 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 					.type = BUXN_DBGX_MSG_CORE,
 					.core = vm_msg,
 				};
-				for (int i = 0; i < MAX_CLIENTS; ++i) {
-					if (clients[i].id != -1) {
-						if (!buxn_dbg_notify_client_async(clients[i].client, notification)) {
-							BIO_WARN(
-								"Client %d takes too long to process messages",
-								i
-							);
-							buxn_dbg_stop_client_handler(clients[i].client);
-						}
-					}
-				}
+				broadcast_to_clients(clients, notification, -1);
 			} break;
 			case SERVER_MSG_VM_DISCONNECTED:
 				BIO_WARN("VM disconnected, terminating");
@@ -296,6 +313,20 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 					BIO_WARN("Maximum number of clients reached, rejecting connection");
 					bio_net_close(msg.new_client.socket, NULL);
 				}
+			} break;
+			case SERVER_MSG_SET_FOCUS: {
+				if (msg.set_focus.type == BUXN_DBGX_FOCUS_JUMP) {
+					vm_controller.info.focus = msg.set_focus.address;
+				}
+
+				buxn_dbgx_msg_t notification = {
+					.type = BUXN_DBGX_MSG_SET_FOCUS,
+					.set_focus = {
+						.type = msg.set_focus.type,
+						.address = msg.set_focus.address,
+					},
+				};
+				broadcast_to_clients(clients, notification, msg.set_focus.client_id);
 			} break;
 			case SERVER_MSG_CLIENT_TERMINATED: {
 				BIO_INFO("Client %d disconnected", msg.client_terminated.id);
@@ -408,6 +439,17 @@ buxn_dbg_client_request(buxn_dbg_client_controller_t* controller, buxn_dbgx_msg_
 			*msg.info = controller->shared_ctx->vm_controller->info;
 			msg.type = BUXN_DBGX_MSG_INFO_REP;
 			buxn_dbg_notify_client_sync(controller->client, msg);
+		} break;
+		case BUXN_DBGX_MSG_SET_FOCUS: {
+			server_msg_t msg_to_server = {
+				.type = SERVER_MSG_SET_FOCUS,
+				.set_focus = {
+					.client_id = controller->id,
+					.type = msg.set_focus.type,
+					.address = msg.set_focus.address,
+				},
+			};
+			bio_wait_and_send_message(true, controller->shared_ctx->server_mailbox, msg_to_server);
 		} break;
 		default: {
 			BIO_WARN("Client %d sends invalid message", controller->id);

@@ -57,6 +57,7 @@ typedef BIO_MAILBOX(msg_t) mailbox_t;
 typedef struct {
 	mailbox_t main_mailbox;
 	const buxn_dbg_symtab_t* symtab;
+	buxn_dbg_client_t client;
 } tui_ctx_t;
 
 static bio_call_status_t
@@ -231,6 +232,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 		bio_tb_present();
 
+		int old_focus = focus_address;
 		buxn_tui_loop(msg, mailbox) {
 			switch (buxn_tui_handle_event(&msg)) {
 				case BUXN_TUI_QUIT:
@@ -261,6 +263,16 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				default:
 					break;
 			}
+		}
+
+		if (focus_address != old_focus) {
+			buxn_dbg_client_send(ctx->client, (buxn_dbgx_msg_t){
+				.type = BUXN_DBGX_MSG_SET_FOCUS,
+				.set_focus = {
+					.type = BUXN_DBGX_FOCUS_HOVER,
+					.address = focus_address,
+				},
+			});
 		}
 	}
 
@@ -296,6 +308,7 @@ bio_main(void* userdata) {
 	tui_ctx_t ui_ctx = {
 		.main_mailbox = mailbox,
 		.symtab = symtab,
+		.client = client,
 	};
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
 

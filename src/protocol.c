@@ -111,6 +111,19 @@ buxn_dbgx_protocol_msg_body(
 				BSERIAL_KEY(ctx, "vm_paused") {
 					BSERIAL_CHECK_STATUS(bserial_bool(ctx, &msg->info->vm_paused));
 				}
+				BSERIAL_KEY(ctx, "focus") {
+					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->info->focus));
+				}
+			}
+			break;
+		case BUXN_DBGX_MSG_SET_FOCUS:
+			BSERIAL_RECORD(ctx, &msg->set_focus) {
+				BSERIAL_KEY(ctx, "type") {
+					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->set_focus.type));
+				}
+				BSERIAL_KEY(ctx, "address") {
+					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->set_focus.address));
+				}
 			}
 			break;
 	}

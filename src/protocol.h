@@ -11,6 +11,7 @@ typedef enum {
 	BUXN_DBGX_MSG_LOG         = 3,
 	BUXN_DBGX_MSG_INFO_REQ    = 4,
 	BUXN_DBGX_MSG_INFO_REP    = 5,
+	BUXN_DBGX_MSG_SET_FOCUS   = 6,
 } buxn_dbgx_msg_type_t;
 
 typedef struct {
@@ -18,11 +19,17 @@ typedef struct {
 	uint8_t brkp_id;
 	bool vm_executing;
 	bool vm_paused;
+	uint16_t focus;
 } buxn_dbgx_info_t;
 
 typedef struct {
 	const char* client_name;
 } buxn_dbgx_init_t;
+
+typedef enum {
+	BUXN_DBGX_FOCUS_HOVER,
+	BUXN_DBGX_FOCUS_JUMP,
+} buxn_dbgx_focus_type_t;
 
 typedef struct {
 	buxn_dbgx_msg_type_t type;
@@ -38,6 +45,11 @@ typedef struct {
 			const char* file;
 			const char* msg;
 		} log;
+
+		struct {
+			buxn_dbgx_focus_type_t type;
+			uint16_t address;
+		} set_focus;
 	};
 } buxn_dbgx_msg_t;
 

@@ -31,6 +31,14 @@ buxn_dbg_make_client(
 	const buxn_dbgx_init_t* init_info
 );
 
+bool
+buxn_dbg_make_client_ex(
+	buxn_dbg_client_t* client,
+	const struct buxn_dbg_transport_info_s* transport,
+	const buxn_dbg_client_args_t* args,
+	const buxn_dbgx_init_t* init_info
+);
+
 static inline bio_call_status_t
 buxn_dbg_client_send_dbg_cmd(buxn_dbg_client_t client, buxn_dbg_cmd_t cmd) {
 	return buxn_dbg_client_send(client, (buxn_dbgx_msg_t){

@@ -30,6 +30,7 @@ typedef BHASH_TABLE(const char*, source_t) source_set_t;
 
 typedef enum {
 	MSG_LOAD_SOURCE,
+	MSG_SET_FOCUS,
 	MSG_QUIT,
 } msg_type_t;
 
@@ -40,6 +41,11 @@ typedef struct {
 		struct {
 			const char* name;
 		} load_source;
+
+		struct {
+			buxn_dbgx_focus_type_t type;
+			uint16_t address;
+		} set_focus;
 	};
 } msg_t;
 
@@ -49,13 +55,14 @@ typedef struct {
 	mailbox_t main_mailbox;
 	const buxn_dbg_symtab_t* symtab;
 	source_set_t* source_set;
+	uint16_t hover_address;
+	uint16_t focus_address;
 } tui_ctx_t;
 
 static void
 tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	tui_ctx_t* ctx = userdata;
 
-	const buxn_dbg_sym_t* focused_symbol = buxn_dbg_find_symbol(ctx->symtab, 0x0100, NULL);
 	int top_line = 1;
 	/*int left_column = 1;*/
 	int focus_line = 1;
@@ -68,18 +75,35 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 		/*int width = tb_width();*/
 		int height = tb_height();
 
-		const char* focused_filename = focused_symbol->region.filename;
-		bhash_index_t index = bhash_find(ctx->source_set, focused_filename);
+		const buxn_dbg_sym_t* hovered_symbol = buxn_dbg_find_symbol(
+			ctx->symtab, ctx->hover_address, NULL
+		);
+		const buxn_dbg_sym_t* focused_symbol = buxn_dbg_find_symbol(
+			ctx->symtab, ctx->focus_address, NULL
+		);
+		if (hovered_symbol != NULL) {
+			focus_line = hovered_symbol->region.range.start.line;
+		}
+
+		const char* focused_filename = NULL;
+		if (focused_symbol != NULL) {
+			focused_filename = focused_symbol->region.filename;
+		}
+		bhash_index_t index = -1;
+		if (focused_filename != NULL) {
+			index = bhash_find(ctx->source_set, focused_filename);
+		}
+
 		source_t source = { 0 };
-		if (!bhash_is_valid(index)) {
+		if (bhash_is_valid(index)) {
+			source = ctx->source_set->values[index];
+		} else if (focused_filename != NULL) {
 			// Ask main to load it
 			msg_t msg = {
 				.type = MSG_LOAD_SOURCE,
 				.load_source.name = focused_filename,
 			};
 			bio_wait_and_send_message(true, ctx->main_mailbox, msg);
-		} else {
-			source = ctx->source_set->values[index];
 		}
 
 		if (focus_line < top_line) {
@@ -134,6 +158,21 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 					foreground = TB_WHITE | TB_BOLD;
 				}
 
+				if (
+					hovered_symbol != NULL
+					&& (
+						symbol == hovered_symbol
+						|| (
+							symbol->region.filename == hovered_symbol->region.filename
+							&& symbol->region.range.start.byte == hovered_symbol->region.range.start.byte
+							&& symbol->region.range.end.byte == hovered_symbol->region.range.end.byte
+						)
+					)
+				) {
+					foreground = TB_BLACK;
+					background = TB_WHITE;
+				}
+
 				int x = range->start.col - 1;
 				int y = range->start.line - top_line;
 				tb_printf(
@@ -146,6 +185,8 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 		if (focused_symbol != NULL) {
 			buxn_tui_status_line("%s", focused_symbol->region.filename);
+		} else {
+			buxn_tui_status_line("No source");
 		}
 
 		bio_tb_present();
@@ -191,6 +232,21 @@ end:
 	return loaded;
 }
 
+static void
+handle_notification(buxn_dbgx_msg_t msg, void* userdata) {
+	mailbox_t mailbox = *(mailbox_t*)userdata;
+	if (msg.type == BUXN_DBGX_MSG_SET_FOCUS) {
+		msg_t msg_to_main = {
+			.type = MSG_SET_FOCUS,
+			.set_focus = {
+				.type = msg.set_focus.type,
+				.address = msg.set_focus.address,
+			},
+		};
+		bio_wait_and_send_message(true, mailbox, msg_to_main);
+	}
+}
+
 static int
 bio_main(void* userdata) {
 	args_t* args = userdata;
@@ -203,18 +259,31 @@ bio_main(void* userdata) {
 		return 1;
 	}
 
+	mailbox_t mailbox;
+	bio_open_mailbox(&mailbox, 8);
+
 	buxn_dbg_client_t client;
-	if (!buxn_dbg_make_client(
+	if (!buxn_dbg_make_client_ex(
 		&client,
 		&args->connect_transport,
+		&(buxn_dbg_client_args_t){
+			.userdata = &mailbox,
+			.msg_handler = handle_notification,
+		},
 		&(buxn_dbgx_init_t){ .client_name = "view:source" }
 	)) {
 		return 1;
 	}
 	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, client));
 
-	mailbox_t mailbox;
-	bio_open_mailbox(&mailbox, 8);
+	buxn_dbgx_info_t info = { 0 };
+	bio_call_status_t status = buxn_dbg_client_send(client, (buxn_dbgx_msg_t){
+		.type = BUXN_DBGX_MSG_INFO_REQ,
+		.info = &info,
+	});
+	if (status != BIO_CALL_OK) {
+		return 1;
+	}
 
 	source_set_t source_set;
 	bhash_config_t hash_cfg = bhash_config_default();
@@ -225,6 +294,8 @@ bio_main(void* userdata) {
 		.main_mailbox = mailbox,
 		.symtab = symtab,
 		.source_set = &source_set,
+		.focus_address = info.focus,
+		.hover_address = info.focus,
 	};
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
 
@@ -298,6 +369,14 @@ bio_main(void* userdata) {
 
 				// Commit
 				bhash_put(&source_set, msg.load_source.name, src);
+				buxn_tui_refresh(tui);
+			} break;
+			case MSG_SET_FOCUS: {
+				if (msg.set_focus.type == BUXN_DBGX_FOCUS_JUMP) {
+					ui_ctx.focus_address = msg.set_focus.address;
+				} else {
+					ui_ctx.hover_address = msg.set_focus.address;
+				}
 				buxn_tui_refresh(tui);
 			} break;
 			case MSG_QUIT:

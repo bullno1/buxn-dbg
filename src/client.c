@@ -198,6 +198,17 @@ buxn_dbg_make_client(
 	const struct buxn_dbg_transport_info_s* transport,
 	const buxn_dbgx_init_t* init_info
 ) {
+	buxn_dbg_client_args_t args = { 0 };
+	return buxn_dbg_make_client_ex(client, transport, &args, init_info);
+}
+
+bool
+buxn_dbg_make_client_ex(
+	buxn_dbg_client_t* client,
+	const struct buxn_dbg_transport_info_s* transport,
+	const buxn_dbg_client_args_t* args,
+	const buxn_dbgx_init_t* init_info
+) {
 	bio_error_t error;
 	bio_socket_t sock;
 	if (!bio_net_connect(
@@ -214,9 +225,9 @@ buxn_dbg_make_client(
 		return false;
 	}
 
-	*client = buxn_dbg_start_client(&(buxn_dbg_client_args_t){
-		.socket = sock,
-	});
+	buxn_dbg_client_args_t args_with_sock = *args;
+	args_with_sock.socket = sock;
+	*client = buxn_dbg_start_client(&args_with_sock);
 
 	bio_call_status_t status = buxn_dbg_client_send(*client, (buxn_dbgx_msg_t){
 		.type = BUXN_DBGX_MSG_INIT,
