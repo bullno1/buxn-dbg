@@ -6,6 +6,7 @@ set(SOURCES
 	"cmd_help.c"
 	"cmd_server.c"
 	"cmd_view_memory.c"
+	"cmd_view_source.c"
 	"cmd_info.c"
 	"cmd_log.c"
 	"server/server.c"

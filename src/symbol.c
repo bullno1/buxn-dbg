@@ -62,6 +62,9 @@ buxn_dbg_find_symbol(
 	uint16_t address,
 	int* index_hint
 ) {
+	int default_index_hint = 0;
+	if (index_hint == NULL) { index_hint = &default_index_hint; }
+
 	int index = *index_hint;
 	for (; index < symtab->num_symbols; ++index) {
 		if (
