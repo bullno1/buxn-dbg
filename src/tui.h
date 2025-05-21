@@ -77,6 +77,8 @@ typedef enum {
 	BUXN_TUI_MOVE_DOWN,
 	BUXN_TUI_MOVE_LEFT,
 	BUXN_TUI_MOVE_RIGHT,
+	BUXN_TUI_MOVE_TO_LINE_START,
+	BUXN_TUI_MOVE_TO_LINE_END,
 } buxn_tui_event_type_t;
 
 buxn_tui_t

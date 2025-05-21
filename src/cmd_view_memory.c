@@ -62,7 +62,7 @@ vm_mem_read(
 			.values = target,
 		},
 	};
-	BIO_DEBUG("Loading %d bytes from 0x%04x", size, addr);
+	BIO_TRACE("Loading %d bytes from 0x%04x", size, addr);
 	return buxn_dbg_client_send_dbg_cmd(client, cmd);
 }
 
@@ -162,6 +162,12 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				case BUXN_TUI_MOVE_RIGHT:
 					focus_address += 1;
 					if (focus_address > UINT16_MAX) { focus_address = UINT16_MAX; }
+					break;
+				case BUXN_TUI_MOVE_TO_LINE_START:
+					focus_address = focus_line * num_bytes_per_row;
+					break;
+				case BUXN_TUI_MOVE_TO_LINE_END:
+					focus_address = (focus_line + 1) * num_bytes_per_row - 1;
 					break;
 				default:
 					break;

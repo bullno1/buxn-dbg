@@ -83,6 +83,16 @@ buxn_tui_handle_event(const struct tb_event* event) {
 			|| event->ch == 'j'
 		) {
 			return BUXN_TUI_MOVE_DOWN;
+		} else if (
+			event->key == TB_KEY_HOME
+			|| event->ch == '0'
+		) {
+			return BUXN_TUI_MOVE_TO_LINE_START;
+		} else if (
+			event->key == TB_KEY_END
+			|| event->ch == '$'
+		) {
+			return BUXN_TUI_MOVE_TO_LINE_END;
 		} else {
 			return BUXN_TUI_UNKNOWN;
 		}
