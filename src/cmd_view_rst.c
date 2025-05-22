@@ -226,6 +226,17 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 						} break;
 					}
 					break;
+				case BUXN_TUI_MOVE_TO_LINE_START:
+					moved = true;
+					focus_type = RST_FOCUS_VECTOR;
+					break;
+				case BUXN_TUI_MOVE_TO_LINE_END:
+					moved = true;
+					focus_type = RST_FOCUS_PC;
+					break;
+				case BUXN_TUI_STEP:
+					buxn_tui_execute_step(&msg, ctx->client);
+					break;
 				case BUXN_TUI_QUIT:
 					should_run = false;
 					break;
