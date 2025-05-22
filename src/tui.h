@@ -4,6 +4,7 @@
 #include "bio_termbox2.h"
 #include <bio/mailbox.h>
 #include <bio/service.h>
+#include "client.h"
 
 /**
  * Event loop helper for a "UI application".
@@ -79,6 +80,7 @@ typedef enum {
 	BUXN_TUI_MOVE_RIGHT,
 	BUXN_TUI_MOVE_TO_LINE_START,
 	BUXN_TUI_MOVE_TO_LINE_END,
+	BUXN_TUI_STEP,
 } buxn_tui_event_type_t;
 
 buxn_tui_t
@@ -91,7 +93,7 @@ void
 buxn_tui_refresh(buxn_tui_t ui);
 
 buxn_tui_event_type_t
-buxn_tui_handle_event(const struct tb_event* event);
+buxn_tui_handle_event(const struct tb_event* event, buxn_dbg_client_t client);
 
 // Common UI elements
 BIO_FORMAT_ATTRIBUTE(1, 2)

@@ -1,4 +1,5 @@
 #include "tui.h"
+#include "client.h"
 
 typedef struct {
 	buxn_tui_entrypoint_t entrypoint;
@@ -53,7 +54,7 @@ buxn_tui_refresh(buxn_tui_t ui) {
 }
 
 buxn_tui_event_type_t
-buxn_tui_handle_event(const struct tb_event* event) {
+buxn_tui_handle_event(const struct tb_event* event, buxn_dbg_client_t client) {
 	if (event->type == 0) {
 		return BUXN_TUI_REFRESH;
 	} else if (event->type == TB_EVENT_KEY) {
@@ -93,6 +94,21 @@ buxn_tui_handle_event(const struct tb_event* event) {
 			|| event->ch == '$'
 		) {
 			return BUXN_TUI_MOVE_TO_LINE_END;
+		} else if (event->ch == 's') {
+			buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
+				.type = BUXN_DBG_CMD_STEP_IN,
+			});
+			return BUXN_TUI_STEP;
+		} else if (event->ch == 'n') {
+			buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
+				.type = BUXN_DBG_CMD_STEP_OVER,
+			});
+			return BUXN_TUI_STEP;
+		} else if (event->ch == 'r') {
+			buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
+				.type = BUXN_DBG_CMD_STEP_OUT,
+			});
+			return BUXN_TUI_STEP;
 		} else {
 			return BUXN_TUI_UNKNOWN;
 		}

@@ -41,6 +41,35 @@ buxn_dbgx_protocol_msg_header(bserial_ctx_t* ctx, buxn_dbgx_msg_t* msg) {
 	return BSERIAL_OK;
 }
 
+static bserial_status_t
+buxn_dbgx_info(
+	bserial_ctx_t* ctx,
+	buxn_dbgx_info_t* info
+) {
+	BSERIAL_RECORD(ctx, info) {
+		BSERIAL_KEY(ctx, "vector_addr") {
+			BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &info->vector_addr));
+		}
+		BSERIAL_KEY(ctx, "pc") {
+			BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &info->pc));
+		}
+		BSERIAL_KEY(ctx, "brkp_id") {
+			BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &info->brkp_id));
+		}
+		BSERIAL_KEY(ctx, "vm_executing") {
+			BSERIAL_CHECK_STATUS(bserial_bool(ctx, &info->vm_executing));
+		}
+		BSERIAL_KEY(ctx, "vm_paused") {
+			BSERIAL_CHECK_STATUS(bserial_bool(ctx, &info->vm_paused));
+		}
+		BSERIAL_KEY(ctx, "focus") {
+			BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &info->focus));
+		}
+	}
+
+	return BSERIAL_OK;
+}
+
 bserial_status_t
 buxn_dbgx_protocol_msg_body(
 	bserial_ctx_t* ctx,
@@ -98,26 +127,10 @@ buxn_dbgx_protocol_msg_body(
 			}
 			break;
 		case BUXN_DBGX_MSG_INFO_REP:
-			BSERIAL_RECORD(ctx, msg->info) {
-				BSERIAL_KEY(ctx, "vector_addr") {
-					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->info->vector_addr));
-				}
-				BSERIAL_KEY(ctx, "pc") {
-					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->info->pc));
-				}
-				BSERIAL_KEY(ctx, "brkp_id") {
-					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->info->brkp_id));
-				}
-				BSERIAL_KEY(ctx, "vm_executing") {
-					BSERIAL_CHECK_STATUS(bserial_bool(ctx, &msg->info->vm_executing));
-				}
-				BSERIAL_KEY(ctx, "vm_paused") {
-					BSERIAL_CHECK_STATUS(bserial_bool(ctx, &msg->info->vm_paused));
-				}
-				BSERIAL_KEY(ctx, "focus") {
-					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->info->focus));
-				}
-			}
+			BSERIAL_CHECK_STATUS(buxn_dbgx_info(ctx, msg->info));
+			break;
+		case BUXN_DBGX_MSG_INFO_PUSH:
+			BSERIAL_CHECK_STATUS(buxn_dbgx_info(ctx, &msg->info_push));
 			break;
 		case BUXN_DBGX_MSG_SET_FOCUS:
 			BSERIAL_RECORD(ctx, &msg->set_focus) {

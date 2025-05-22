@@ -12,6 +12,7 @@ typedef enum {
 	BUXN_DBGX_MSG_INFO_REQ    = 4,
 	BUXN_DBGX_MSG_INFO_REP    = 5,
 	BUXN_DBGX_MSG_SET_FOCUS   = 6,
+	BUXN_DBGX_MSG_INFO_PUSH   = 7,
 } buxn_dbgx_msg_type_t;
 
 typedef struct {
@@ -33,6 +34,7 @@ typedef struct {
 		buxn_dbgx_init_t init;
 		buxn_dbg_msg_t core;
 		buxn_dbgx_info_t* info;
+		buxn_dbgx_info_t info_push;
 
 		struct {
 			bio_log_level_t level;

@@ -31,7 +31,7 @@ typedef BHASH_TABLE(const char*, source_t) source_set_t;
 
 typedef enum {
 	MSG_LOAD_SOURCE,
-	MSG_SET_FOCUS,
+	MSG_INFO_PUSH,
 	MSG_QUIT,
 } msg_type_t;
 
@@ -43,9 +43,7 @@ typedef struct {
 			const char* name;
 		} load_source;
 
-		struct {
-			uint16_t address;
-		} set_focus;
+		buxn_dbgx_info_t info_push;
 	};
 } msg_t;
 
@@ -71,15 +69,15 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	const buxn_dbg_sym_t* focused_symbol = buxn_dbg_find_symbol(
 		ctx->symtab, ctx->focus_address, NULL
 	);
-	const buxn_dbg_sym_t* pc_symbol = buxn_dbg_find_symbol(
-		ctx->symtab, ctx->pc, NULL
-	);
 	while (bio_is_mailbox_open(mailbox) && should_run) {
 		tb_clear();
 
 		int width = tb_width();
 		int height = tb_height();
 		int column_offset = 0;
+		const buxn_dbg_sym_t* pc_symbol = buxn_dbg_find_symbol(
+			ctx->symtab, ctx->pc, NULL
+		);
 
 		const buxn_dbg_sym_t* new_focused_symbol = buxn_dbg_find_symbol(
 			ctx->symtab, ctx->focus_address, NULL
@@ -228,7 +226,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 		const buxn_dbg_sym_t* old_focused_symbol = focused_symbol;
 		buxn_tui_loop(msg, mailbox) {
-			switch (buxn_tui_handle_event(&msg)) {
+			switch (buxn_tui_handle_event(&msg, ctx->client)) {
 				case BUXN_TUI_MOVE_LEFT:
 					if (focused_symbol != NULL) {
 						// Search backward in the symbol table for:
@@ -423,12 +421,10 @@ end:
 static void
 handle_notification(buxn_dbgx_msg_t msg, void* userdata) {
 	mailbox_t mailbox = *(mailbox_t*)userdata;
-	if (msg.type == BUXN_DBGX_MSG_SET_FOCUS) {
+	if (msg.type == BUXN_DBGX_MSG_INFO_PUSH) {
 		msg_t msg_to_main = {
-			.type = MSG_SET_FOCUS,
-			.set_focus = {
-				.address = msg.set_focus.address,
-			},
+			.type = MSG_INFO_PUSH,
+			.info_push = msg.info_push,
 		};
 		bio_wait_and_send_message(true, mailbox, msg_to_main);
 	}
@@ -573,8 +569,9 @@ bio_main(void* userdata) {
 				bhash_put(&source_set, msg.load_source.name, src);
 				buxn_tui_refresh(tui);
 			} break;
-			case MSG_SET_FOCUS: {
-				ui_ctx.focus_address = msg.set_focus.address;
+			case MSG_INFO_PUSH: {
+				ui_ctx.focus_address = msg.info_push.focus;
+				ui_ctx.pc = msg.info_push.pc;
 				buxn_tui_refresh(tui);
 			} break;
 			case MSG_QUIT:
