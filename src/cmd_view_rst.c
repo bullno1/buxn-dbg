@@ -3,10 +3,12 @@
 #include "client.h"
 #include "logger.h"
 #include "tui.h"
+#include "symbol.h"
 #include <bio/mailbox.h>
 
 typedef struct {
 	buxn_dbg_transport_info_t connect_transport;
+	const char* dbg_filename;
 } args_t;
 
 typedef enum {
@@ -25,6 +27,7 @@ typedef struct {
 	buxn_dbg_stack_info_t stack;
 	buxn_dbgx_info_t vm_info;
 	mailbox_t main_mailbox;
+	buxn_dbg_symtab_t* symtab;
 } tui_ctx_t;
 
 static void
@@ -40,55 +43,90 @@ handle_notification(buxn_dbgx_msg_t msg, void* userdata) {
 }
 
 static void
+print_src_loc_at(
+	int x, int y,
+	buxn_dbg_symtab_t* symtab,
+	uint16_t pc
+) {
+	if (symtab == NULL) { return; }
+
+	const buxn_dbg_sym_t* symbol = buxn_dbg_find_symbol(symtab, pc, NULL);
+	if (symbol != NULL) {
+		tb_printf(
+			x, y,
+			TB_DEFAULT | TB_DIM, TB_DEFAULT,
+			"( %s:%d:%d )",
+			symbol->region.filename,
+			symbol->region.range.start.line, symbol->region.range.start.col
+		);
+	}
+}
+
+static void
 tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	tui_ctx_t* ctx = userdata;
 
 	bool should_run = true;
+	const int label_x = 0;
+	const int addr_x = 7;
+	const int src_x = 15;
 	while (bio_is_mailbox_open(mailbox) && should_run) {
 		tb_clear();
 
 		tb_printf(
-			0, 0,
+			label_x, 0,
 			TB_DEFAULT | TB_BOLD, TB_DEFAULT,
 			"vector"
 		);
 		tb_printf(
-			7, 0,
+			addr_x, 0,
 			TB_DEFAULT, TB_DEFAULT,
 			"│ %04x",
 			ctx->vm_info.vector_addr
 		);
+		print_src_loc_at(src_x, 0, ctx->symtab, ctx->vm_info.vector_addr);
 
 		// Return stack from least current to most current
 		tb_printf(
-			0, 1,
+			label_x, 1,
 			TB_DEFAULT, TB_DEFAULT,
 			"wst",
 			ctx->vm_info.vector_addr
 		);
 		for (int i = 0; i < ctx->stack.pointer; i += 2) {
+			int entry_y = i / 2 + 1;
+			uint8_t return_hi = ctx->stack.data[i];
+			uint8_t return_lo = ctx->stack.data[i + 1];
 			tb_printf(
-				7, i / 2 + 1,
+				addr_x, entry_y,
 				TB_DEFAULT, TB_DEFAULT,
 				"│ %02x%02x",
-				ctx->stack.data[i],
-				ctx->stack.data[i + 1]
+				return_hi,
+				return_lo
+			);
+
+			uint16_t return_addr = return_hi << 8 | return_lo;
+			print_src_loc_at(
+				src_x, entry_y,
+				ctx->symtab,
+				return_addr - 1  // Show the caller instead of the return addr
 			);
 		}
 
-		// Current pc
+		// pc
 		int pc_line = (ctx->stack.pointer + 1) / 2 + 1;
 		tb_printf(
-			0, pc_line,
+			label_x, pc_line,
 			TB_DEFAULT | TB_BOLD, TB_DEFAULT,
 			"pc"
 		);
 		tb_printf(
-			7, pc_line,
+			addr_x, pc_line,
 			TB_DEFAULT, TB_DEFAULT,
 			"│ %04x",
 			ctx->vm_info.pc
 		);
+		print_src_loc_at(src_x, pc_line, ctx->symtab, ctx->vm_info.pc);
 
 		buxn_tui_status_line("System/rst: 0x%02d", ctx->stack.pointer);
 
@@ -147,6 +185,15 @@ bio_main(void* userdata) {
 		return 1;
 	}
 
+	buxn_dbg_symtab_t* symtab = NULL;
+	if (args->dbg_filename != NULL) {
+		symtab = buxn_dbg_load_symbols(args->dbg_filename);
+	}
+	if (symtab == NULL) {
+		BIO_WARN("Return stack will not be annotated");
+	}
+	ui_ctx.symtab= symtab;
+
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
 
 	bio_foreach_message(msg, mailbox) {
@@ -169,6 +216,7 @@ bio_main(void* userdata) {
 end:
 
 	buxn_tui_stop(tui);
+	buxn_dbg_unload_symbols(symtab);
 	bio_close_mailbox(mailbox);
 	buxn_dbg_stop_client(client);
 	return 0;
@@ -186,6 +234,15 @@ BUXN_DBG_CMD_EX(view_rst, "view:rst", "View the return stack") {
 			.parser = barg_transport(&args.connect_transport),
 			.summary = "How to connect to the debug server",
 			.description = CONNECT_TRANSPORT_OPT_DESC,
+		},
+		{
+			.name = "dbg-file",
+			.short_name = 'd',
+			.value_name = "path",
+			.parser = barg_str(&args.dbg_filename),
+			.summary = "Path to the .rom.dbg file",
+			.description =
+				"If not specified, the return stack with not be annotated.",
 		},
 		barg_opt_hidden_help(),
 	};
