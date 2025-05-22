@@ -638,7 +638,7 @@ end:
 	return 0;
 }
 
-BUXN_DBG_CMD_EX(view_source, "view:source", "View the source file") {
+BUXN_DBG_CMD_EX(view_source, "view:source", "View the current source file") {
 	args_t args = {
 		.src_dir = ".",
 	};
