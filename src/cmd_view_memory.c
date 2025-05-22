@@ -37,6 +37,7 @@ typedef struct {
 
 typedef enum {
 	MSG_REQUEST_REFRESH,
+	MSG_SET_FOCUS,
 	MSG_INFO_PUSH,
 	MSG_QUIT,
 } msg_type_t;
@@ -50,6 +51,7 @@ typedef struct {
 			uint16_t end_address;
 		} refresh;
 
+		buxn_dbgx_set_focus_t set_focus;
 		buxn_dbgx_info_t info_push;
 	};
 } msg_t;
@@ -299,7 +301,13 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 static void
 handle_notification(buxn_dbgx_msg_t msg, void* userdata) {
 	mailbox_t mailbox = *(mailbox_t*)userdata;
-	if (msg.type == BUXN_DBGX_MSG_INFO_PUSH) {
+	if (msg.type == BUXN_DBGX_MSG_SET_FOCUS) {
+		msg_t msg_to_main = {
+			.type = MSG_SET_FOCUS,
+			.set_focus = msg.set_focus,
+		};
+		bio_wait_and_send_message(true, mailbox, msg_to_main);
+	} else if (msg.type == BUXN_DBGX_MSG_INFO_PUSH) {
 		msg_t msg_to_main = {
 			.type = MSG_INFO_PUSH,
 			.info_push = msg.info_push,
@@ -454,19 +462,20 @@ bio_main(void* userdata) {
 				view_buffer->loaded_end_address = requested_end_addr;
 				buxn_tui_refresh(tui);
 			} break;
+			case MSG_SET_FOCUS:
+				ui_ctx.focus_address = msg.set_focus.address;
+				buxn_tui_refresh(tui);
+				break;
 			case MSG_INFO_PUSH: {
 				ui_ctx.focus_address = msg.info_push.focus;
-				bool pc_changed = (ui_ctx.pc != msg.info_push.pc);
 				ui_ctx.pc = msg.info_push.pc;
 				// Refresh view since a memory store might have happened
-				if (pc_changed) {
-					vm_mem_read(
-						client,
-						ui_ctx.view_buffer.loaded_start_address,
-						ui_ctx.view_buffer.loaded_end_address - ui_ctx.view_buffer.loaded_start_address,
-						ui_ctx.view_buffer.buffer
-					);
-				}
+				vm_mem_read(
+					client,
+					ui_ctx.view_buffer.loaded_start_address,
+					ui_ctx.view_buffer.loaded_end_address - ui_ctx.view_buffer.loaded_start_address,
+					ui_ctx.view_buffer.buffer
+				);
 				buxn_tui_refresh(tui);
 			} break;
 			case MSG_QUIT:

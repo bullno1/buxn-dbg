@@ -31,6 +31,7 @@ typedef BHASH_TABLE(const char*, source_t) source_set_t;
 
 typedef enum {
 	MSG_LOAD_SOURCE,
+	MSG_SET_FOCUS,
 	MSG_INFO_PUSH,
 	MSG_QUIT,
 } msg_type_t;
@@ -43,6 +44,7 @@ typedef struct {
 			const char* name;
 		} load_source;
 
+		buxn_dbgx_set_focus_t set_focus;
 		buxn_dbgx_info_t info_push;
 	};
 } msg_t;
@@ -434,7 +436,13 @@ end:
 static void
 handle_notification(buxn_dbgx_msg_t msg, void* userdata) {
 	mailbox_t mailbox = *(mailbox_t*)userdata;
-	if (msg.type == BUXN_DBGX_MSG_INFO_PUSH) {
+	if (msg.type == BUXN_DBGX_MSG_SET_FOCUS) {
+		msg_t msg_to_main = {
+			.type = MSG_SET_FOCUS,
+			.set_focus = msg.set_focus,
+		};
+		bio_wait_and_send_message(true, mailbox, msg_to_main);
+	} else if (msg.type == BUXN_DBGX_MSG_INFO_PUSH) {
 		msg_t msg_to_main = {
 			.type = MSG_INFO_PUSH,
 			.info_push = msg.info_push,
@@ -582,11 +590,15 @@ bio_main(void* userdata) {
 				bhash_put(&source_set, msg.load_source.name, src);
 				buxn_tui_refresh(tui);
 			} break;
-			case MSG_INFO_PUSH: {
+			case MSG_SET_FOCUS:
+				ui_ctx.focus_address = msg.set_focus.address;
+				buxn_tui_refresh(tui);
+				break;
+			case MSG_INFO_PUSH:
 				ui_ctx.focus_address = msg.info_push.focus;
 				ui_ctx.pc = msg.info_push.pc;
 				buxn_tui_refresh(tui);
-			} break;
+				break;
 			case MSG_QUIT:
 				goto end;
 		}

@@ -280,35 +280,34 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 		switch (msg.type) {
 			case SERVER_MSG_VM_NOTIFICATION: {
 				buxn_dbg_msg_t vm_msg = msg.vm_notification.msg;
-				// Replace VM pause message with INFO_PUSH
 				if (vm_msg.type == BUXN_DBG_MSG_PAUSED) {
-					buxn_dbg_cmd_t cmd = {
+					// Cache pc so new clients immediately get up-to-date pc
+					buxn_dbg_cmd_t get_pc = {
 						.type = BUXN_DBG_CMD_INFO,
 						.info = {
 							.type = BUXN_DBG_INFO_PC,
 							.pc = &vm_controller.info.pc,
 						},
 					};
-					buxn_dbg_send_vm_cmd(
-						client_shared_ctx.vm,
-						cmd,
-						(bio_signal_t){ 0 }
-					);
+					bio_signal_t no_cancel = { 0 };
+					buxn_dbg_send_vm_cmd(client_shared_ctx.vm, get_pc, no_cancel);
+
+					// Focus on new pc
 					vm_controller.info.focus = vm_controller.info.pc;
 
-					// Push state update
+					// Push new VM and focus tate
 					buxn_dbgx_msg_t info_push = {
 						.type = BUXN_DBGX_MSG_INFO_PUSH,
 						.info_push = vm_controller.info,
 					};
 					broadcast_to_clients(clients, info_push, -1);
-				} else {
-					buxn_dbgx_msg_t notification = {
-						.type = BUXN_DBGX_MSG_CORE,
-						.core = vm_msg,
-					};
-					broadcast_to_clients(clients, notification, -1);
 				}
+
+				buxn_dbgx_msg_t notification = {
+					.type = BUXN_DBGX_MSG_CORE,
+					.core = vm_msg,
+				};
+				broadcast_to_clients(clients, notification, -1);
 			} break;
 			case SERVER_MSG_VM_DISCONNECTED:
 				BIO_WARN("VM disconnected, terminating");
@@ -340,8 +339,8 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 			case SERVER_MSG_SET_FOCUS: {
 				vm_controller.info.focus = msg.set_focus.address;
 				buxn_dbgx_msg_t notification = {
-					.type = BUXN_DBGX_MSG_INFO_PUSH,
-					.info_push = vm_controller.info,
+					.type = BUXN_DBGX_MSG_SET_FOCUS,
+					.set_focus = { .address = msg.set_focus.address },
 				};
 				broadcast_to_clients(clients, notification, msg.set_focus.client_id);
 			} break;

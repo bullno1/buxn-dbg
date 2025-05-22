@@ -29,6 +29,10 @@ typedef struct {
 } buxn_dbgx_init_t;
 
 typedef struct {
+	uint16_t address;
+} buxn_dbgx_set_focus_t;
+
+typedef struct {
 	buxn_dbgx_msg_type_t type;
 	union {
 		buxn_dbgx_init_t init;
@@ -44,9 +48,7 @@ typedef struct {
 			const char* msg;
 		} log;
 
-		struct {
-			uint16_t address;
-		} set_focus;
+		buxn_dbgx_set_focus_t set_focus;
 	};
 } buxn_dbgx_msg_t;
 
