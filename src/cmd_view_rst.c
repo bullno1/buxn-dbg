@@ -12,13 +12,17 @@ typedef struct {
 } args_t;
 
 typedef enum {
+	MSG_SET_FOCUS,
 	MSG_INFO_PUSH,
 	MSG_QUIT,
 } msg_type_t;
 
 typedef struct {
 	msg_type_t type;
-	buxn_dbgx_info_t info_push;
+	union {
+		buxn_dbgx_set_focus_t set_focus;
+		buxn_dbgx_info_t info_push;
+	};
 } msg_t;
 
 typedef BIO_MAILBOX(msg_t) mailbox_t;
@@ -33,7 +37,13 @@ typedef struct {
 static void
 handle_notification(buxn_dbgx_msg_t msg, void* userdata) {
 	mailbox_t mailbox = *(mailbox_t*)userdata;
-	if (msg.type == BUXN_DBGX_MSG_INFO_PUSH) {
+	if (msg.type == BUXN_DBGX_MSG_SET_FOCUS) {
+		msg_t msg_to_main = {
+			.type = MSG_SET_FOCUS,
+			.set_focus = msg.set_focus,
+		};
+		bio_wait_and_send_message(true, mailbox, msg_to_main);
+	} else if (msg.type == BUXN_DBGX_MSG_INFO_PUSH) {
 		msg_t msg_to_main = {
 			.type = MSG_INFO_PUSH,
 			.info_push = msg.info_push,
@@ -67,12 +77,15 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	tui_ctx_t* ctx = userdata;
 
 	bool should_run = true;
-	const int label_x = 0;
-	const int addr_x = 7;
-	const int src_x = 15;
+	const int label_x = 2;
+	const int addr_x = 9;
+	const int src_x = 17;
 	while (bio_is_mailbox_open(mailbox) && should_run) {
 		tb_clear();
 
+		if (ctx->vm_info.vector_addr == ctx->vm_info.focus) {
+			tb_printf(0, 0, TB_DEFAULT | TB_BOLD, TB_DEFAULT, ">");
+		}
 		tb_printf(
 			label_x, 0,
 			TB_DEFAULT | TB_BOLD, TB_DEFAULT,
@@ -89,14 +102,20 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 		// Return stack from least current to most current
 		tb_printf(
 			label_x, 1,
-			TB_DEFAULT, TB_DEFAULT,
+			TB_DEFAULT | TB_BOLD, TB_DEFAULT,
 			"wst",
 			ctx->vm_info.vector_addr
 		);
 		for (int i = 0; i < ctx->stack.pointer; i += 2) {
-			int entry_y = i / 2 + 1;
 			uint8_t return_hi = ctx->stack.data[i];
 			uint8_t return_lo = ctx->stack.data[i + 1];
+			uint16_t return_addr = return_hi << 8 | return_lo;
+			int entry_y = i / 2 + 1;
+
+			if (return_addr == ctx->vm_info.focus) {
+				tb_printf(0, entry_y, TB_DEFAULT | TB_BOLD, TB_DEFAULT, ">");
+			}
+
 			tb_printf(
 				addr_x, entry_y,
 				TB_DEFAULT, TB_DEFAULT,
@@ -105,16 +124,18 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				return_lo
 			);
 
-			uint16_t return_addr = return_hi << 8 | return_lo;
 			print_src_loc_at(
 				src_x, entry_y,
 				ctx->symtab,
-				return_addr - 1  // Show the caller instead of the return addr
+				return_addr
 			);
 		}
 
 		// pc
 		int pc_line = (ctx->stack.pointer + 1) / 2 + 1;
+		if (ctx->vm_info.pc == ctx->vm_info.focus) {
+			tb_printf(0, pc_line, TB_DEFAULT | TB_BOLD, TB_DEFAULT, ">");
+		}
 		tb_printf(
 			label_x, pc_line,
 			TB_DEFAULT | TB_BOLD, TB_DEFAULT,
@@ -170,6 +191,7 @@ bio_main(void* userdata) {
 	tui_ctx_t ui_ctx = {
 		.main_mailbox = mailbox,
 	};
+
 	buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
 		.type = BUXN_DBG_CMD_INFO,
 		.info = {
@@ -192,12 +214,16 @@ bio_main(void* userdata) {
 	if (symtab == NULL) {
 		BIO_WARN("Return stack will not be annotated");
 	}
-	ui_ctx.symtab= symtab;
+	ui_ctx.symtab = symtab;
 
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
 
 	bio_foreach_message(msg, mailbox) {
 		switch (msg.type) {
+			case MSG_SET_FOCUS:
+				ui_ctx.vm_info.focus = msg.set_focus.address;
+				buxn_tui_refresh(tui);
+				break;
 			case MSG_INFO_PUSH:
 				ui_ctx.vm_info = msg.info_push;
 				buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
