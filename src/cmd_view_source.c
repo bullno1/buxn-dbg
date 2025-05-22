@@ -236,14 +236,12 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 						// Search backward in the symbol table for:
 						//
 						// * A symbol in the same file
-						// * Has an end byte before the focused symbol start byte
 						// * Has an end address before the focused address
 						int sym_index = (int)(focused_symbol - ctx->symtab->symbols);
 						for (int i = sym_index - 1; i >= 0; --i) {
 							const buxn_dbg_sym_t* symbol = &ctx->symtab->symbols[i];
 							if (
 								symbol->region.filename == focused_symbol->region.filename
-								&& symbol->region.range.end.byte < focused_symbol->region.range.start.byte
 								&& symbol->addr_max < ctx->focus_address
 							) {
 								focused_symbol = symbol;
@@ -257,14 +255,12 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 						// Search forward in the symbol table for:
 						//
 						// * A symbol in the same file
-						// * Has a start byte after the focused symbol end byte
-						// * Has an start address before the focused address
+						// * Has a start address after the focused address
 						int sym_index = (int)(focused_symbol - ctx->symtab->symbols);
 						for (int i = sym_index + 1; i < ctx->symtab->num_symbols; ++i) {
 							const buxn_dbg_sym_t* symbol = &ctx->symtab->symbols[i];
 							if (
 								symbol->region.filename == focused_symbol->region.filename
-								&& symbol->region.range.start.byte > focused_symbol->region.range.end.byte
 								&& symbol->addr_min > ctx->focus_address
 							) {
 								focused_symbol = symbol;
