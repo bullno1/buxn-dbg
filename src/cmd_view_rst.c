@@ -27,10 +27,18 @@ typedef struct {
 
 typedef BIO_MAILBOX(msg_t) mailbox_t;
 
+typedef enum {
+	RST_FOCUS_UNKNOWN,
+	RST_FOCUS_VECTOR,
+	RST_FOCUS_RST,
+	RST_FOCUS_PC,
+} rst_focus_type_t;
+
 typedef struct {
 	buxn_dbg_stack_info_t stack;
 	buxn_dbgx_info_t vm_info;
 	mailbox_t main_mailbox;
+	buxn_dbg_client_t client;
 	buxn_dbg_symtab_t* symtab;
 } tui_ctx_t;
 
@@ -80,11 +88,17 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	const int label_x = 2;
 	const int addr_x = 9;
 	const int src_x = 17;
+	rst_focus_type_t focus_type;
+	int focus_index;
 	while (bio_is_mailbox_open(mailbox) && should_run) {
 		tb_clear();
 
+		focus_type = RST_FOCUS_UNKNOWN;
+
+		// Vector
 		if (ctx->vm_info.vector_addr == ctx->vm_info.focus) {
 			tb_printf(0, 0, TB_DEFAULT | TB_BOLD, TB_DEFAULT, ">");
+			focus_type = RST_FOCUS_VECTOR;
 		}
 		tb_printf(
 			label_x, 0,
@@ -103,7 +117,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 		tb_printf(
 			label_x, 1,
 			TB_DEFAULT | TB_BOLD, TB_DEFAULT,
-			"wst",
+			"rst",
 			ctx->vm_info.vector_addr
 		);
 		for (int i = 0; i < ctx->stack.pointer; i += 2) {
@@ -114,6 +128,8 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 			if (return_addr == ctx->vm_info.focus) {
 				tb_printf(0, entry_y, TB_DEFAULT | TB_BOLD, TB_DEFAULT, ">");
+				focus_type = RST_FOCUS_RST;
+				focus_index = i / 2;
 			}
 
 			tb_printf(
@@ -135,6 +151,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 		int pc_line = (ctx->stack.pointer + 1) / 2 + 1;
 		if (ctx->vm_info.pc == ctx->vm_info.focus) {
 			tb_printf(0, pc_line, TB_DEFAULT | TB_BOLD, TB_DEFAULT, ">");
+			focus_type = RST_FOCUS_PC;
 		}
 		tb_printf(
 			label_x, pc_line,
@@ -153,14 +170,91 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 		bio_tb_present();
 
+		bool moved = false;
 		buxn_tui_loop(msg, mailbox) {
 			switch (buxn_tui_handle_event(&msg)) {
+				case BUXN_TUI_MOVE_UP:
+				case BUXN_TUI_MOVE_LEFT:
+					moved = true;
+					switch (focus_type) {
+						case RST_FOCUS_UNKNOWN:
+						case RST_FOCUS_PC: {
+							int rst_depth = ctx->stack.pointer / 2;
+							if (rst_depth > 0) {
+								focus_type = RST_FOCUS_RST;
+								focus_index = rst_depth - 1;
+							} else {
+								focus_type = RST_FOCUS_VECTOR;
+							}
+						} break;
+						case RST_FOCUS_RST: {
+							if (focus_index > 0) {
+								focus_index -= 1;
+							} else {
+								focus_type = RST_FOCUS_VECTOR;
+							}
+						} break;
+						case RST_FOCUS_VECTOR: {
+							focus_type = RST_FOCUS_PC;
+						} break;
+					}
+					break;
+				case BUXN_TUI_MOVE_DOWN:
+				case BUXN_TUI_MOVE_RIGHT:
+					moved = true;
+					switch (focus_type) {
+						case RST_FOCUS_PC: {
+							focus_type = RST_FOCUS_VECTOR;
+						} break;
+						case RST_FOCUS_RST: {
+							int rst_depth = ctx->stack.pointer / 2;
+							if (focus_index < rst_depth - 1) {
+								focus_index += 1;
+							} else {
+								focus_type = RST_FOCUS_PC;
+							}
+						} break;
+						case RST_FOCUS_UNKNOWN:
+						case RST_FOCUS_VECTOR: {
+							int rst_depth = ctx->stack.pointer / 2;
+							if (rst_depth > 0) {
+								focus_type = RST_FOCUS_RST;
+								focus_index = 0;
+							} else {
+								focus_type = RST_FOCUS_PC;
+							}
+						} break;
+					}
+					break;
 				case BUXN_TUI_QUIT:
 					should_run = false;
 					break;
 				default:
 					break;
 			}
+		}
+
+		uint16_t next_focus;
+		switch (focus_type) {
+			case RST_FOCUS_UNKNOWN:
+			case RST_FOCUS_PC:
+				next_focus = ctx->vm_info.pc;
+				break;
+			case RST_FOCUS_VECTOR:
+				next_focus = ctx->vm_info.vector_addr;
+				break;
+			case RST_FOCUS_RST: {
+				uint8_t return_hi = ctx->stack.data[focus_index * 2];
+				uint8_t return_lo = ctx->stack.data[focus_index * 2 + 1];
+				next_focus = return_hi << 8 | return_lo;
+			} break;
+		}
+
+		if (moved && next_focus != ctx->vm_info.focus) {
+			buxn_dbg_client_send(ctx->client, (buxn_dbgx_msg_t){
+				.type = BUXN_DBGX_MSG_SET_FOCUS,
+				.set_focus = { .address = next_focus },
+			});
 		}
 	}
 
@@ -190,6 +284,7 @@ bio_main(void* userdata) {
 
 	tui_ctx_t ui_ctx = {
 		.main_mailbox = mailbox,
+		.client = client,
 	};
 
 	buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
