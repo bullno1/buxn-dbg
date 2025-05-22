@@ -93,7 +93,10 @@ void
 buxn_tui_refresh(buxn_tui_t ui);
 
 buxn_tui_event_type_t
-buxn_tui_handle_event(const struct tb_event* event, buxn_dbg_client_t client);
+buxn_tui_handle_event(const struct tb_event* event);
+
+bio_call_status_t
+buxn_tui_execute_step(const struct tb_event* event, buxn_dbg_client_t client);
 
 // Common UI elements
 BIO_FORMAT_ATTRIBUTE(1, 2)

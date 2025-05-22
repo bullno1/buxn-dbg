@@ -54,7 +54,7 @@ buxn_tui_refresh(buxn_tui_t ui) {
 }
 
 buxn_tui_event_type_t
-buxn_tui_handle_event(const struct tb_event* event, buxn_dbg_client_t client) {
+buxn_tui_handle_event(const struct tb_event* event) {
 	if (event->type == 0) {
 		return BUXN_TUI_REFRESH;
 	} else if (event->type == TB_EVENT_KEY) {
@@ -95,25 +95,42 @@ buxn_tui_handle_event(const struct tb_event* event, buxn_dbg_client_t client) {
 		) {
 			return BUXN_TUI_MOVE_TO_LINE_END;
 		} else if (event->ch == 's') {
-			buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
-				.type = BUXN_DBG_CMD_STEP_IN,
-			});
 			return BUXN_TUI_STEP;
 		} else if (event->ch == 'n') {
-			buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
-				.type = BUXN_DBG_CMD_STEP_OVER,
-			});
 			return BUXN_TUI_STEP;
 		} else if (event->ch == 'r') {
-			buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
-				.type = BUXN_DBG_CMD_STEP_OUT,
-			});
 			return BUXN_TUI_STEP;
 		} else {
 			return BUXN_TUI_UNKNOWN;
 		}
 	} else {
 		return BUXN_TUI_UNKNOWN;
+	}
+}
+
+bio_call_status_t
+buxn_tui_execute_step(const struct tb_event* event, buxn_dbg_client_t client) {
+	bool do_step = false;
+	buxn_dbg_cmd_type_t step = BUXN_DBG_CMD_STEP_IN;
+	if (event->type == TB_EVENT_KEY) {
+		if (event->ch == 's') {
+			step = BUXN_DBG_CMD_STEP_IN;
+			do_step = true;
+		} else if (event->ch == 'n') {
+			step = BUXN_DBG_CMD_STEP_OVER;
+			do_step = true;
+		} else if (event->ch == 'r') {
+			step = BUXN_DBG_CMD_STEP_OUT;
+			do_step = true;
+		}
+	}
+
+	if (do_step) {
+		return buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
+			.type = step,
+		});
+	} else {
+		return BIO_CALL_OK;
 	}
 }
 

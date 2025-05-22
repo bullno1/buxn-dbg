@@ -243,7 +243,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 		int old_focus = ctx->focus_address;
 		buxn_tui_loop(msg, mailbox) {
-			switch (buxn_tui_handle_event(&msg, ctx->client)) {
+			switch (buxn_tui_handle_event(&msg)) {
 				case BUXN_TUI_QUIT:
 					should_run = false;
 					break;
@@ -272,6 +272,9 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 					break;
 				case BUXN_TUI_MOVE_TO_LINE_END:
 					ctx->focus_address = (focus_line + 1) * num_bytes_per_row - 1;
+					break;
+				case BUXN_TUI_STEP:
+					buxn_tui_execute_step(&msg, ctx->client);
 					break;
 				default:
 					break;

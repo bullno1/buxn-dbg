@@ -226,7 +226,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 		const buxn_dbg_sym_t* old_focused_symbol = focused_symbol;
 		buxn_tui_loop(msg, mailbox) {
-			switch (buxn_tui_handle_event(&msg, ctx->client)) {
+			switch (buxn_tui_handle_event(&msg)) {
 				case BUXN_TUI_MOVE_LEFT:
 					if (focused_symbol != NULL) {
 						// Search backward in the symbol table for:
@@ -368,6 +368,9 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 						barray(const buxn_dbg_sym_t*) line_syms = source.lines[sym_lineno - 1].symbols;
 						focused_symbol = line_syms[barray_len(line_syms) - 1];
 					}
+					break;
+				case BUXN_TUI_STEP:
+					buxn_tui_execute_step(&msg, ctx->client);
 					break;
 				case BUXN_TUI_QUIT:
 					should_run = false;
