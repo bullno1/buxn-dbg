@@ -53,6 +53,8 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			tb_printf(x, y, TB_DEFAULT, TB_DEFAULT, "%02x", ctx->stack.data[i]);
 		}
 
+		buxn_tui_status_line("System/wst: 0x%02d", ctx->stack.pointer);
+
 		bio_tb_present();
 
 		buxn_tui_loop(msg, mailbox) {
