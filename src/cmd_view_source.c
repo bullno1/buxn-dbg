@@ -134,7 +134,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			if (column_offset < source_line->len) {
 				tb_printf(
 					0, line - top_line,
-					TB_DEFAULT, TB_DEFAULT,
+					TB_DEFAULT | TB_DIM, TB_DEFAULT,
 					"%.*s",
 					source_line->len - column_offset,
 					source_line->content + column_offset
