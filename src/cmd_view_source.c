@@ -181,7 +181,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 						)
 					)
 				) {
-					background = TB_GREEN;
+					background = TB_CYAN;
 					foreground = TB_BLACK | TB_BOLD;
 				}
 
@@ -197,7 +197,11 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 					)
 				) {
 					background = TB_WHITE;
-					foreground = TB_BLACK | TB_BOLD;
+					if (focused_symbol == pc_symbol) {
+						foreground = TB_CYAN | TB_BOLD;
+					} else {
+						foreground = TB_BLACK | TB_BOLD;
+					}
 				}
 
 				int x = range->start.col - 1;
@@ -221,7 +225,13 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 		}
 
 		if (focused_symbol != NULL) {
-			buxn_tui_status_line("%s", focused_symbol->region.filename);
+			const buxn_asm_source_region_t* region = &focused_symbol->region;
+			buxn_tui_status_line(
+				"%s (%d:%d:%d - %d:%d:%d)",
+				region->filename,
+				region->range.start.line, region->range.start.col, region->range.start.byte,
+				region->range.end.line, region->range.end.col, region->range.end.byte
+			);
 		} else {
 			buxn_tui_status_line("No source");
 		}

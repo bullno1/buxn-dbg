@@ -174,13 +174,17 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			}
 
 			if (address == ctx->pc) {
-				background = TB_GREEN;
+				background = TB_CYAN;
 				foreground = TB_BLACK | TB_BOLD;
 			}
 
 			if (address == ctx->focus_address) {
 				background = TB_WHITE;
-				foreground = TB_BLACK | TB_BOLD;
+				if (ctx->focus_address == ctx->pc) {
+					foreground = TB_CYAN | TB_BOLD;
+				} else {
+					foreground = TB_BLACK | TB_BOLD;
+				}
 			}
 
 			if (loaded_start_addr <= address && address < loaded_end_addr) {
