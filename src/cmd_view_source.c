@@ -69,6 +69,10 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	const buxn_dbg_sym_t* focused_symbol = buxn_dbg_find_symbol(
 		ctx->symtab, ctx->focus_address, NULL
 	);
+	if (focused_symbol == NULL) {
+		focused_symbol = buxn_dbg_find_symbol(ctx->symtab, ctx->pc, NULL);
+	}
+
 	while (bio_is_mailbox_open(mailbox) && should_run) {
 		tb_clear();
 
@@ -561,7 +565,7 @@ bio_main(void* userdata) {
 					int symbol_line = symbol->region.range.start.line;
 					if (
 						symbol->region.filename == msg.load_source.name
-						&& symbol_line  <= num_lines
+						&& symbol_line <= num_lines
 					) {
 						source_line_t* line = &src.lines[symbol_line - 1];
 						barray_push(line->symbols, symbol, NULL);
