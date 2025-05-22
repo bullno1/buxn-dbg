@@ -248,13 +248,15 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 						// Search backward in the symbol table for:
 						//
 						// * A symbol in the same file
-						// * Has an end address before the focused address
+						// * Has a start byte before the focused address
+						// * Has a start address before the focused address
 						int sym_index = (int)(focused_symbol - ctx->symtab->symbols);
 						for (int i = sym_index - 1; i >= 0; --i) {
 							const buxn_dbg_sym_t* symbol = &ctx->symtab->symbols[i];
 							if (
 								symbol->region.filename == focused_symbol->region.filename
-								&& symbol->addr_max < ctx->focus_address
+								&& symbol->region.range.start.byte < focused_symbol->region.range.start.byte
+								&& symbol->addr_min < ctx->focus_address
 							) {
 								focused_symbol = symbol;
 								break;
@@ -267,12 +269,14 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 						// Search forward in the symbol table for:
 						//
 						// * A symbol in the same file
+						// * Has a start byte after the focused address
 						// * Has a start address after the focused address
 						int sym_index = (int)(focused_symbol - ctx->symtab->symbols);
 						for (int i = sym_index + 1; i < ctx->symtab->num_symbols; ++i) {
 							const buxn_dbg_sym_t* symbol = &ctx->symtab->symbols[i];
 							if (
 								symbol->region.filename == focused_symbol->region.filename
+								&& symbol->region.range.start.byte > focused_symbol->region.range.start.byte
 								&& symbol->addr_min > ctx->focus_address
 							) {
 								focused_symbol = symbol;
@@ -287,12 +291,12 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 						int sym_lineno = sym_range.start.line;
 
 						// Search upward in lines for a line with at least a
-						// symbol whose end address is before the focused address
+						// symbol whose address is before the focused address
 						source_line_t* line = NULL;
 						for (int i = sym_lineno - 1; i >= 1; --i) {
 							source_line_t* candidate_line = &source.lines[i - 1];
 							for (int j = 0; j < (int)barray_len(candidate_line->symbols); ++j) {
-								if (candidate_line->symbols[j]->addr_max < ctx->focus_address) {
+								if (candidate_line->symbols[j]->addr_min < ctx->focus_address) {
 									line = candidate_line;
 									break;
 								}
@@ -302,12 +306,17 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 						}
 
 						// Search within this line for a symbol whose column is
-						// the closest to the focused symbol
+						// the closest to the focused symbol and with a lower
+						// start address
 						const buxn_dbg_sym_t* next_sym = NULL;
 						if (line != NULL) {
 							int col_diff = INT_MAX;
 							for (int i = 0; i < (int)barray_len(line->symbols); ++i) {
 								const buxn_dbg_sym_t* candidate_sym = line->symbols[i];
+								if (candidate_sym->addr_min >= focused_symbol->addr_min) {
+									continue;
+								}
+
 								int candidate_col_diff = abs(
 									candidate_sym->region.range.start.col - sym_range.start.col
 								);
@@ -344,12 +353,16 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 						}
 
 						// Search within this line for a symbol whose column is
-						// the closest to the focused symbol
+						// the closest to the focused symbol and with a higher
+						// start address
 						const buxn_dbg_sym_t* next_sym = NULL;
 						if (line != NULL) {
 							int col_diff = INT_MAX;
 							for (int i = 0; i < (int)barray_len(line->symbols); ++i) {
 								const buxn_dbg_sym_t* candidate_sym = line->symbols[i];
+								if (candidate_sym->addr_min <= focused_symbol->addr_min) {
+									continue;
+								}
 								int candidate_col_diff = abs(
 									candidate_sym->region.range.start.col - sym_range.start.col
 								);
