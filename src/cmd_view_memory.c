@@ -450,18 +450,21 @@ bio_main(void* userdata) {
 				view_buffer->loaded_end_address = requested_end_addr;
 				buxn_tui_refresh(tui);
 			} break;
-			case MSG_INFO_PUSH:
+			case MSG_INFO_PUSH: {
 				ui_ctx.focus_address = msg.info_push.focus;
+				bool pc_changed = (ui_ctx.pc != msg.info_push.pc);
 				ui_ctx.pc = msg.info_push.pc;
 				// Refresh view since a memory store might have happened
-				vm_mem_read(
-					client,
-					ui_ctx.view_buffer.loaded_start_address,
-					ui_ctx.view_buffer.loaded_end_address - ui_ctx.view_buffer.loaded_start_address,
-					ui_ctx.view_buffer.buffer
-				);
+				if (pc_changed) {
+					vm_mem_read(
+						client,
+						ui_ctx.view_buffer.loaded_start_address,
+						ui_ctx.view_buffer.loaded_end_address - ui_ctx.view_buffer.loaded_start_address,
+						ui_ctx.view_buffer.buffer
+					);
+				}
 				buxn_tui_refresh(tui);
-				break;
+			} break;
 			case MSG_QUIT:
 				goto end;
 		}
