@@ -500,7 +500,7 @@ bio_main(void* userdata) {
 
 				int len = snprintf(
 					path_buf, sizeof(path_buf),
-					"%s%s",
+					"%s/%s",
 					args->src_dir, msg.load_source.name
 				);
 				if (len < 0 || len >= (int)sizeof(path_buf)) {
@@ -609,7 +609,7 @@ end:
 
 BUXN_DBG_CMD_EX(view_source, "view:source", "View the source file") {
 	args_t args = {
-		.src_dir = "./",
+		.src_dir = ".",
 	};
 	buxn_dbg_parse_transport("abstract-connect:buxn/dbg", &args.connect_transport);
 

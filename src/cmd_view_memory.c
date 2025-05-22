@@ -48,7 +48,6 @@ typedef struct {
 		struct {
 			uint16_t start_address;
 			uint16_t end_address;
-			view_buffer_t* view_buffer;
 		} refresh;
 
 		buxn_dbgx_info_t info_push;
@@ -61,6 +60,7 @@ typedef struct {
 	mailbox_t main_mailbox;
 	const buxn_dbg_symtab_t* symtab;
 	buxn_dbg_client_t client;
+	view_buffer_t view_buffer;
 	int focus_address;
 	int pc;
 } tui_ctx_t;
@@ -89,7 +89,6 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	tui_ctx_t* ctx = userdata;
 
 	int top_line = 0;
-	view_buffer_t view_buffer = { 0 };
 
 	bool should_run = true;
 	while (bio_is_mailbox_open(mailbox) && should_run) {
@@ -117,8 +116,8 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 		if (end_address > UINT16_MAX) { end_address = UINT16_MAX; }
 
 		// If the desired address range is not yet loaded, request a refresh
-		int loading_start_addr = (int)view_buffer.loading_start_address;
-		int loading_end_addr = (int)view_buffer.loading_end_address;
+		int loading_start_addr = (int)ctx->view_buffer.loading_start_address;
+		int loading_end_addr = (int)ctx->view_buffer.loading_end_address;
 		if (!(
 			loading_start_addr <= start_address
 			&& start_address < loading_end_addr
@@ -130,15 +129,14 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				.refresh = {
 					.start_address = (uint16_t)start_address,
 					.end_address = (uint16_t)end_address,
-					.view_buffer = &view_buffer,
 				},
 			};
 			bio_wait_and_send_message(true, ctx->main_mailbox, refresh_msg);
 		}
 
 		// Render based on what we have
-		int loaded_start_addr = (int)view_buffer.loaded_start_address;
-		int loaded_end_addr = (int)view_buffer.loaded_end_address;
+		int loaded_start_addr = (int)ctx->view_buffer.loaded_start_address;
+		int loaded_end_addr = (int)ctx->view_buffer.loaded_end_address;
 		int symbol_index_hint = 0;
 		const buxn_dbg_sym_t* focused_symbol = NULL;
 		uint8_t focused_byte = 0;
@@ -186,7 +184,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			}
 
 			if (loaded_start_addr <= address && address < loaded_end_addr) {
-				uint8_t byte = view_buffer.buffer[address - loaded_start_addr];
+				uint8_t byte = ctx->view_buffer.buffer[address - loaded_start_addr];
 				if (address == ctx->focus_address) {
 					focused_byte = byte;
 					focused_byte_is_known = true;
@@ -292,7 +290,6 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	}
 
 	bio_wait_and_send_message(true, ctx->main_mailbox, (msg_t){ .type = MSG_QUIT });
-	buxn_dbg_free(view_buffer.buffer);
 }
 
 static void
@@ -360,7 +357,7 @@ bio_main(void* userdata) {
 	bio_foreach_message(msg, mailbox) {
 		switch (msg.type) {
 			case MSG_REQUEST_REFRESH: {
-				view_buffer_t* view_buffer = msg.refresh.view_buffer;
+				view_buffer_t* view_buffer = &ui_ctx.view_buffer;
 				int requested_start_addr = (int)msg.refresh.start_address;
 				int requested_end_addr = (int)msg.refresh.end_address;
 
@@ -456,6 +453,13 @@ bio_main(void* userdata) {
 			case MSG_INFO_PUSH:
 				ui_ctx.focus_address = msg.info_push.focus;
 				ui_ctx.pc = msg.info_push.pc;
+				// Refresh view since a memory store might have happened
+				vm_mem_read(
+					client,
+					ui_ctx.view_buffer.loaded_start_address,
+					ui_ctx.view_buffer.loaded_end_address - ui_ctx.view_buffer.loaded_start_address,
+					ui_ctx.view_buffer.buffer
+				);
 				buxn_tui_refresh(tui);
 				break;
 			case MSG_QUIT:
@@ -467,6 +471,7 @@ end:
 	buxn_tui_stop(tui);
 	buxn_dbg_unload_symbols(symtab);
 	buxn_dbg_free(load_buffer);
+	buxn_dbg_free(ui_ctx.view_buffer.buffer);
 
 	bio_close_mailbox(mailbox);
 	buxn_dbg_stop_client(client);
