@@ -277,7 +277,7 @@ buxn_dbg_make_bserial_io_from_socket(bio_socket_t socket) {
 		.max_num_symbols = 16,
 		.max_record_fields = 8,
 		.max_symbol_len = 16,
-		.max_depth = 4,
+		.max_depth = 8,
 	};
 	size_t bserial_mem_size = bserial_ctx_mem_size(bserial_cfg);
 

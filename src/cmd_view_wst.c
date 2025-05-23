@@ -86,7 +86,11 @@ bio_main(void* userdata) {
 			.userdata = &mailbox,
 			.msg_handler = handle_notification,
 		},
-		&(buxn_dbgx_init_t){ .client_name = "view:wst" }
+		&(buxn_dbgx_init_t){
+			.client_name = "view:wst",
+			.subscriptions = BUXN_DBGX_SUB_INFO_PUSH,
+		},
+		NULL
 	)) {
 		return 1;
 	}

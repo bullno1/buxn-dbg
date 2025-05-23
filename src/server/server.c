@@ -57,6 +57,8 @@ typedef struct {
 
 struct buxn_dbg_client_controller_s {
 	int id;
+	bool initialized;
+	uint32_t subscriptions;
 	buxn_dbg_client_handler_t client;
 	client_shared_ctx_t* shared_ctx;
 };
@@ -347,6 +349,7 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 			case SERVER_MSG_CLIENT_TERMINATED: {
 				BIO_INFO("Client %d disconnected", msg.client_terminated.id);
 				clients[msg.client_terminated.id].id = -1;
+				clients[msg.client_terminated.id].initialized = false;
 				clients[msg.client_terminated.id].client = (buxn_dbg_client_handler_t){ 0 };
 			} break;
 			case SERVER_MSG_TERMINATE_CLIENT: {
@@ -428,7 +431,33 @@ terminate_client(buxn_dbg_client_controller_t* controller) {
 
 void
 buxn_dbg_client_request(buxn_dbg_client_controller_t* controller, buxn_dbgx_msg_t msg) {
+	if (!controller->initialized && msg.type != BUXN_DBGX_MSG_INIT) {
+		BIO_WARN("Client %d sends message without initialization", controller->id);
+		terminate_client(controller);
+		return;
+	}
+
 	switch (msg.type) {
+		case BUXN_DBGX_MSG_INIT: {
+			BIO_DEBUG("Initializing");
+			if (controller->initialized) {
+				BIO_WARN("Client %d sends init twice", controller->id);
+				terminate_client(controller);
+				return;
+			}
+
+			buxn_dbgx_msg_t rep = { .type = BUXN_DBGX_MSG_INIT_REP };
+
+			if (msg.init.options & BUXN_DBGX_INIT_OPT_INFO) {
+				rep.init_rep.info = &controller->shared_ctx->vm_controller->info;
+			}
+
+			controller->subscriptions = msg.init.subscriptions;
+			buxn_dbg_notify_client_sync(controller->client, rep);
+
+			controller->initialized = true;
+			BIO_DEBUG("Initialized");
+		} break;
 		case BUXN_DBGX_MSG_CORE: {
 			if (msg.core.type == BUXN_DBG_MSG_COMMAND_REQ) {
 				buxn_dbg_send_vm_cmd(controller->shared_ctx->vm, msg.core.cmd, (bio_signal_t){ 0 });
@@ -438,11 +467,6 @@ buxn_dbg_client_request(buxn_dbg_client_controller_t* controller, buxn_dbgx_msg_
 				BIO_WARN("Client %d sends invalid core message", controller->id);
 				terminate_client(controller);
 			}
-		} break;
-		case BUXN_DBGX_MSG_INFO_REQ: {
-			*msg.info = controller->shared_ctx->vm_controller->info;
-			msg.type = BUXN_DBGX_MSG_INFO_REP;
-			buxn_dbg_notify_client_sync(controller->client, msg);
 		} break;
 		case BUXN_DBGX_MSG_SET_FOCUS: {
 			server_msg_t msg_to_server = {

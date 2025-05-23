@@ -407,12 +407,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 		if (focused_symbol != old_focused_symbol) {
 			ctx->focus_address = focused_symbol->addr_min;
-			buxn_dbg_client_send(ctx->client, (buxn_dbgx_msg_t){
-				.type = BUXN_DBGX_MSG_SET_FOCUS,
-				.set_focus = {
-					.address = focused_symbol->addr_min,
-				},
-			});
+			buxn_dbg_client_set_focus(ctx->client, focused_symbol->addr_min);
 		}
 	}
 
@@ -479,6 +474,8 @@ bio_main(void* userdata) {
 	mailbox_t mailbox;
 	bio_open_mailbox(&mailbox, 8);
 
+	buxn_dbgx_info_t info = { 0 };
+
 	buxn_dbg_client_t client;
 	if (!buxn_dbg_make_client_ex(
 		&client,
@@ -487,20 +484,18 @@ bio_main(void* userdata) {
 			.userdata = &mailbox,
 			.msg_handler = handle_notification,
 		},
-		&(buxn_dbgx_init_t){ .client_name = "view:source" }
+		&(buxn_dbgx_init_t){
+			.client_name = "view:source",
+			.subscriptions = BUXN_DBGX_SUB_INFO_PUSH | BUXN_DBGX_SUB_FOCUS,
+			.options = BUXN_DBGX_INIT_OPT_INFO,
+		},
+		&(buxn_dbgx_init_rep_t){
+			.info = &info,
+		}
 	)) {
 		return 1;
 	}
 	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "view:source"));
-
-	buxn_dbgx_info_t info = { 0 };
-	bio_call_status_t status = buxn_dbg_client_send(client, (buxn_dbgx_msg_t){
-		.type = BUXN_DBGX_MSG_INFO_REQ,
-		.info = &info,
-	});
-	if (status != BIO_CALL_OK) {
-		return 1;
-	}
 
 	source_set_t source_set;
 	bhash_config_t hash_cfg = bhash_config_default();

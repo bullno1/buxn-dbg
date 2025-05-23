@@ -114,12 +114,14 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 		print_src_loc_at(src_x, 0, ctx->symtab, ctx->vm_info.vector_addr);
 
 		// Return stack from least current to most current
-		tb_printf(
-			label_x, 1,
-			TB_DEFAULT | TB_BOLD, TB_DEFAULT,
-			"rst",
-			ctx->vm_info.vector_addr
-		);
+		if (ctx->stack.pointer > 0) {
+			tb_printf(
+				label_x, 1,
+				TB_DEFAULT | TB_BOLD, TB_DEFAULT,
+				"rst",
+				ctx->vm_info.vector_addr
+			);
+		}
 		for (int i = 0; i < ctx->stack.pointer; i += 2) {
 			uint8_t return_hi = ctx->stack.data[i];
 			uint8_t return_lo = ctx->stack.data[i + 1];
@@ -262,10 +264,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 		}
 
 		if (moved && next_focus != ctx->vm_info.focus) {
-			buxn_dbg_client_send(ctx->client, (buxn_dbgx_msg_t){
-				.type = BUXN_DBGX_MSG_SET_FOCUS,
-				.set_focus = { .address = next_focus },
-			});
+			buxn_dbg_client_set_focus(ctx->client, next_focus);
 		}
 	}
 
@@ -275,9 +274,12 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 static int
 bio_main(void* userdata) {
 	args_t* args = userdata;
+	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "view:rst"));
 
 	mailbox_t mailbox;
 	bio_open_mailbox(&mailbox, 8);
+
+	tui_ctx_t ui_ctx = { .main_mailbox = mailbox };
 
 	buxn_dbg_client_t client;
 	if (!buxn_dbg_make_client_ex(
@@ -287,40 +289,26 @@ bio_main(void* userdata) {
 			.userdata = &mailbox,
 			.msg_handler = handle_notification,
 		},
-		&(buxn_dbgx_init_t){ .client_name = "view:rst" }
-	)) {
-		return 1;
-	}
-	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "view:rst"));
-
-	tui_ctx_t ui_ctx = {
-		.main_mailbox = mailbox,
-		.client = client,
-	};
-
-	buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
-		.type = BUXN_DBG_CMD_INFO,
-		.info = {
-			.type = BUXN_DBG_INFO_RST,
-			.stack = &ui_ctx.stack,
+		&(buxn_dbgx_init_t){
+			.client_name = "view:rst",
+			.subscriptions = BUXN_DBGX_SUB_INFO_PUSH | BUXN_DBGX_SUB_FOCUS,
+			.options = BUXN_DBGX_INIT_OPT_INFO,
 		},
-	});
-	bio_call_status_t status = buxn_dbg_client_send(client, (buxn_dbgx_msg_t){
-		.type = BUXN_DBGX_MSG_INFO_REQ,
-		.info = &ui_ctx.vm_info,
-	});
-	if (status != BIO_CALL_OK) {
+		&(buxn_dbgx_init_rep_t){
+			.info = &ui_ctx.vm_info,
+		}
+	)) {
+		bio_close_mailbox(mailbox);
 		return 1;
 	}
 
 	buxn_dbg_symtab_t* symtab = NULL;
 	if (args->dbg_filename != NULL) {
-		symtab = buxn_dbg_load_symbols(args->dbg_filename);
+		ui_ctx.symtab = symtab = buxn_dbg_load_symbols(args->dbg_filename);
 	}
 	if (symtab == NULL) {
 		BIO_WARN("Return stack will not be annotated");
 	}
-	ui_ctx.symtab = symtab;
 
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
 

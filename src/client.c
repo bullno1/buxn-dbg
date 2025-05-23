@@ -7,14 +7,24 @@ static const bio_tag_t BUXN_CLIENT_DATA = BIO_TAG_INIT("buxn.client.data");
 
 typedef enum {
 	CLIENT_MSG_DISCONNECTED,
-	CLIENT_MSG_SEND,
+	CLIENT_MSG_INIT,
+	CLIENT_MSG_STOP,
+	CLIENT_MSG_DBG_CMD,
+	CLIENT_MSG_SET_FOCUS,
 } client_msg_type_t;
 
 struct buxn_dbg_client_msg_s {
 	BIO_SERVICE_MSG
 
 	client_msg_type_t type;
-	buxn_dbgx_msg_t msg;
+	union {
+		struct {
+			const buxn_dbgx_init_t* msg;
+			const buxn_dbgx_init_rep_t* rep;
+		} init;
+		buxn_dbg_cmd_t dbg_cmd;
+		uint16_t focus;
+	};
 };
 
 typedef BIO_MAILBOX(buxn_dbg_client_msg_t) buxn_dbg_client_mailbox_t;
@@ -46,6 +56,7 @@ static void
 reader_entry(void* userdata) {
 	client_reader_ctx_t* ctx = userdata;
 	bio_set_coro_name("client/reader");
+	buxn_dbg_msg_buffer_t init_buf;
 
 	while (!ctx->should_terminate) {
 		buxn_dbgx_msg_t server_msg = { 0 };
@@ -61,7 +72,7 @@ reader_entry(void* userdata) {
 			if (server_msg.core.type == BUXN_DBG_MSG_COMMAND_REP) {
 				buxn_dbg_client_msg_t pending_cmd;
 				if (!next_pending_cmd(ctx, &pending_cmd)) { break; }
-				server_msg.core.cmd = pending_cmd.msg.core.cmd;
+				server_msg.core.cmd = pending_cmd.dbg_cmd;
 				if (buxn_dbg_protocol_msg_body(ctx->bserial_in, NULL, &server_msg.core) != BSERIAL_OK) {
 					break;
 				}
@@ -77,13 +88,15 @@ reader_entry(void* userdata) {
 				}
 			}
 		} else if (
-			server_msg.type == BUXN_DBGX_MSG_INFO_REP
+			server_msg.type == BUXN_DBGX_MSG_INIT_REP
 		) {
 			buxn_dbg_client_msg_t pending_cmd;
 			if (!next_pending_cmd(ctx, &pending_cmd)) { break; }
-			server_msg.info = pending_cmd.msg.info;
+			if (pending_cmd.init.rep != NULL) {
+				server_msg.init_rep = *pending_cmd.init.rep;
+			}
 
-			if (buxn_dbgx_protocol_msg_body(ctx->bserial_in, NULL, &server_msg) != BSERIAL_OK) {
+			if (buxn_dbgx_protocol_msg_body(ctx->bserial_in, init_buf, &server_msg) != BSERIAL_OK) {
 				break;
 			}
 
@@ -128,18 +141,45 @@ client_entry(void* userdata) {
 		switch (msg.type) {
 			case CLIENT_MSG_DISCONNECTED:
 				goto end;
-			case CLIENT_MSG_SEND: {
-				if (buxn_dbgx_protocol_msg(io->out, NULL, &msg.msg) != BSERIAL_OK) {
-					break;
+			case CLIENT_MSG_INIT: {
+				buxn_dbgx_msg_t init = {
+					.type = BUXN_DBGX_MSG_INIT,
+					.init = *msg.init.msg,
+				};
+				barray_push(ctx.pending_cmds, msg, NULL);
+				if (buxn_dbgx_protocol_msg(io->out, NULL, &init) != BSERIAL_OK) {
+					goto end;
 				}
-
-				if (
-					msg.msg.type == BUXN_DBGX_MSG_CORE
-					|| msg.msg.type == BUXN_DBGX_MSG_INFO_REQ
-				) {
-					barray_push(ctx.pending_cmds, msg, NULL);
-				} else {
-					bio_respond(msg) { }
+			} break;
+			case CLIENT_MSG_STOP: {
+				buxn_dbgx_msg_t bye = { .type = BUXN_DBGX_MSG_BYE };
+				if (buxn_dbgx_protocol_msg(io->out, NULL, &bye) != BSERIAL_OK) {
+					goto end;
+				}
+				bio_respond(msg) { }
+			} break;
+			case CLIENT_MSG_DBG_CMD: {
+				buxn_dbgx_msg_t dbg_cmd = {
+					.type = BUXN_DBGX_MSG_CORE,
+					.core = {
+						.type = BUXN_DBG_MSG_COMMAND_REQ,
+						.cmd = msg.dbg_cmd,
+					},
+				};
+				barray_push(ctx.pending_cmds, msg, NULL);
+				BIO_TRACE("Send");
+				if (buxn_dbgx_protocol_msg(io->out, NULL, &dbg_cmd) != BSERIAL_OK) {
+					goto end;
+				}
+				BIO_TRACE("Sent");
+			} break;
+			case CLIENT_MSG_SET_FOCUS: {
+				buxn_dbgx_msg_t set_focus = {
+					.type = BUXN_DBGX_MSG_SET_FOCUS,
+					.set_focus.address = msg.focus,
+				};
+				if (buxn_dbgx_protocol_msg(io->out, NULL, &set_focus) != BSERIAL_OK) {
+					goto end;
 				}
 			} break;
 		}
@@ -163,7 +203,12 @@ buxn_dbg_start_client(const buxn_dbg_client_args_t* args) {
 
 void
 buxn_dbg_stop_client(buxn_dbg_client_t client) {
-	buxn_dbg_client_send(client, (buxn_dbgx_msg_t){ .type = BUXN_DBGX_MSG_BYE });
+	buxn_dbg_client_msg_t msg_to_service = {
+		.type = CLIENT_MSG_STOP,
+	};
+	bio_signal_t cancel_signal = { 0 };
+	bio_call_service(client, msg_to_service, cancel_signal);
+
 	buxn_dbg_client_args_t* args = bio_get_coro_data(client.coro, &BUXN_CLIENT_DATA);
 	if (args != NULL) {
 		bio_net_close(args->socket, NULL);
@@ -171,42 +216,13 @@ buxn_dbg_stop_client(buxn_dbg_client_t client) {
 	}
 }
 
-bio_call_status_t
-buxn_dbg_client_send(buxn_dbg_client_t client, buxn_dbgx_msg_t msg) {
-	buxn_dbg_client_msg_t msg_to_service = {
-		.type = CLIENT_MSG_SEND,
-		.msg = msg,
-	};
-	if (
-		msg.type == BUXN_DBGX_MSG_INIT
-		|| msg.type == BUXN_DBGX_MSG_BYE
-		|| msg.type == BUXN_DBGX_MSG_CORE
-		|| msg.type == BUXN_DBGX_MSG_INFO_REQ
-	) {
-		bio_signal_t cancel_signal = { 0 };
-		return bio_call_service(client, msg_to_service, cancel_signal);
-	} else {
-		bio_notify_service(client, msg_to_service, true);
-		return BIO_CALL_OK;
-	}
-}
-
-bool
-buxn_dbg_make_client(
-	buxn_dbg_client_t* client,
-	const struct buxn_dbg_transport_info_s* transport,
-	const buxn_dbgx_init_t* init_info
-) {
-	buxn_dbg_client_args_t args = { 0 };
-	return buxn_dbg_make_client_ex(client, transport, &args, init_info);
-}
-
 bool
 buxn_dbg_make_client_ex(
 	buxn_dbg_client_t* client,
 	const struct buxn_dbg_transport_info_s* transport,
 	const buxn_dbg_client_args_t* args,
-	const buxn_dbgx_init_t* init_info
+	const buxn_dbgx_init_t* init_info,
+	const buxn_dbgx_init_rep_t* init_rep
 ) {
 	bio_error_t error;
 	bio_socket_t sock;
@@ -228,15 +244,41 @@ buxn_dbg_make_client_ex(
 	args_with_sock.socket = sock;
 	*client = buxn_dbg_start_client(&args_with_sock);
 
-	bio_call_status_t status = buxn_dbg_client_send(*client, (buxn_dbgx_msg_t){
-		.type = BUXN_DBGX_MSG_INIT,
-		.init = *init_info,
-	});
+	buxn_dbg_client_msg_t init_msg = {
+		.type = CLIENT_MSG_INIT,
+		.init = {
+			.msg = init_info,
+			.rep = init_rep,
+		},
+	};
+	bio_signal_t no_cancel = { 0 };
+	bio_call_status_t status = bio_call_service(*client, init_msg, no_cancel);
 	if (status == BIO_CALL_OK) {
 		return true;
 	} else {
+		BIO_ERROR("Could not initialize");
+
 		bio_net_close(sock, NULL);
 		bio_stop_service(*client);
 		return false;
 	}
+}
+
+bio_call_status_t
+buxn_dbg_client_send_dbg_cmd(buxn_dbg_client_t client, buxn_dbg_cmd_t cmd) {
+	buxn_dbg_client_msg_t msg = {
+		.type = CLIENT_MSG_DBG_CMD,
+		.dbg_cmd = cmd,
+	};
+	bio_signal_t no_cancel = { 0 };
+	return bio_call_service(client, msg, no_cancel);
+}
+
+void
+buxn_dbg_client_set_focus(buxn_dbg_client_t client, uint16_t address) {
+	buxn_dbg_client_msg_t msg = {
+		.type = CLIENT_MSG_SET_FOCUS,
+		.focus = address,
+	};
+	bio_notify_service(client, msg, true);
 }

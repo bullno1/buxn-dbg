@@ -1,37 +1,7 @@
 #include "protocol.h"
 #include <string.h>
-
-static inline void*
-buxn_dbgx_protocol_alloc(buxn_dbg_msg_buffer_t buffer, size_t alignment) {
-	return (void*)(((intptr_t)buffer + (intptr_t)alignment - 1) & -(intptr_t)alignment);
-}
-
-static inline bserial_status_t
-buxn_dbgx_str(
-	bserial_ctx_t* ctx,
-	char** buf_ptr,
-	char* buf_ptr_max,
-	const char** str_ptr
-) {
-	if (bserial_mode(ctx) == BSERIAL_MODE_READ) {
-		if (*buf_ptr >= buf_ptr_max - 1) { return BSERIAL_MALFORMED; }
-
-		uint64_t len = buf_ptr_max - *buf_ptr;
-		BSERIAL_CHECK_STATUS(bserial_blob(ctx, *buf_ptr, &len));
-		if (len > 0) {
-			(*buf_ptr)[len] = '\0';
-			*str_ptr = *buf_ptr;
-			*buf_ptr += len + 1;
-		} else {
-			*str_ptr = NULL;
-		}
-	} else {
-		uint64_t len = *str_ptr != NULL ? strlen(*str_ptr) : 0;
-		BSERIAL_CHECK_STATUS(bserial_blob(ctx, (char*)*str_ptr, &len));
-	}
-
-	return BSERIAL_OK;
-}
+#include "common.h"
+#include "btmp_buf.h"
 
 bserial_status_t
 buxn_dbgx_protocol_msg_header(bserial_ctx_t* ctx, buxn_dbgx_msg_t* msg) {
@@ -70,6 +40,15 @@ buxn_dbgx_info(
 	return BSERIAL_OK;
 }
 
+static bserial_status_t
+bserial_optional(bserial_ctx_t* ctx, bool* present) {
+	uint64_t len = *present ? 1 : 0;
+	BSERIAL_CHECK_STATUS(bserial_array(ctx, &len));
+	if (len > 1) { return BSERIAL_MALFORMED; }
+	*present = len > 0;
+	return BSERIAL_OK;
+}
+
 bserial_status_t
 buxn_dbgx_protocol_msg_body(
 	bserial_ctx_t* ctx,
@@ -77,32 +56,68 @@ buxn_dbgx_protocol_msg_body(
 	buxn_dbgx_msg_t* msg
 ) {
 	uint8_t type = msg->type;
-	char* str_buf = (char*)buffer;
-	char* str_buf_max = buffer == NULL
-		? NULL
-		: (char*)buffer + BUXN_DBG_MAX_MEM_ACCESS_SIZE;
+	btmp_buf_t tmp_buf = {
+		.mem = buffer,
+		.size = buffer == NULL ? 0 : BUXN_DBG_MAX_MEM_ACCESS_SIZE,
+	};
 	switch ((buxn_dbgx_msg_type_t)type) {
 		case BUXN_DBGX_MSG_INIT: {
 			BSERIAL_RECORD(ctx, &msg->init) {
 				BSERIAL_KEY(ctx, client_name) {
-					BSERIAL_CHECK_STATUS(
-						buxn_dbgx_str(ctx, &str_buf, str_buf_max, &msg->init.client_name)
-					);
+					BSERIAL_CHECK_STATUS(bserial_str(ctx, &msg->init.client_name, &tmp_buf));
+				}
+
+				BSERIAL_KEY(ctx, subscriptions) {
+					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->init.subscriptions));
+				}
+
+				BSERIAL_KEY(ctx, options) {
+					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->init.options));
 				}
 			};
 		} break;
+		case BUXN_DBGX_MSG_INIT_REP:
+			BSERIAL_RECORD(ctx, &msg->init_rep) {
+				BSERIAL_KEY(ctx, info) {
+					bool present = msg->init_rep.info != NULL;
+					BSERIAL_CHECK_STATUS(bserial_optional(ctx, &present));
+					if (present) {
+						BSERIAL_CHECK_STATUS(buxn_dbgx_info(ctx, msg->init_rep.info));
+					}
+				}
+
+				BSERIAL_KEY(ctx, support_files) {
+					bool present = msg->init_rep.support_files != NULL;
+					BSERIAL_CHECK_STATUS(bserial_optional(ctx, &present));
+					if (present) {
+						BSERIAL_RECORD(ctx, msg->init_rep.support_files) {
+							BSERIAL_KEY(ctx, dbg_filename) {
+								BSERIAL_CHECK_STATUS(
+									bserial_str(
+										ctx,
+										&msg->init_rep.support_files->dbg_filename,
+										&tmp_buf
+									)
+								);
+							}
+							BSERIAL_KEY(ctx, src_dir) {
+								BSERIAL_CHECK_STATUS(
+									bserial_str(
+										ctx,
+										&msg->init_rep.support_files->src_dir,
+										&tmp_buf
+									)
+								);
+							}
+						}
+					}
+				}
+			}
+			break;
 		case BUXN_DBGX_MSG_BYE:
 			break;
 		case BUXN_DBGX_MSG_CORE:
 			BSERIAL_CHECK_STATUS(buxn_dbg_protocol_msg(ctx, buffer, &msg->core));
-			break;
-		case BUXN_DBGX_MSG_INFO_REQ:
-			if (bserial_mode(ctx) == BSERIAL_MODE_READ) {
-				msg->info = buxn_dbgx_protocol_alloc(buffer, _Alignof(buxn_dbgx_info_t));
-			}
-			break;
-		case BUXN_DBGX_MSG_INFO_REP:
-			BSERIAL_CHECK_STATUS(buxn_dbgx_info(ctx, msg->info));
 			break;
 		case BUXN_DBGX_MSG_INFO_PUSH:
 			BSERIAL_CHECK_STATUS(buxn_dbgx_info(ctx, &msg->info_push));

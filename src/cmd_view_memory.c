@@ -162,7 +162,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			uintattr_t foreground = TB_DEFAULT;
 
 			if (symbol == NULL) {
-				foreground = TB_DEFAULT;
+				foreground = TB_DEFAULT | TB_DIM;
 			} else if (symbol->type == BUXN_DBG_SYM_TEXT) {
 				foreground = TB_GREEN;
 			} else if (symbol->type == BUXN_DBG_SYM_OPCODE) {
@@ -240,6 +240,15 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				region->range.end.line, region->range.end.col, region->range.end.byte
 			);
 		} else {
+			// Dumb disassembly
+			if (focused_byte_is_known) {
+				tb_printf(
+					0, 0,
+					TB_DEFAULT | TB_DIM,
+					TB_DEFAULT,
+					"Opcode: %s", opcode_names[focused_byte]
+				);
+			}
 			buxn_tui_status_line("[0x%04x]", ctx->focus_address);
 		}
 
@@ -286,12 +295,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 		}
 
 		if (ctx->focus_address != old_focus) {
-			buxn_dbg_client_send(ctx->client, (buxn_dbgx_msg_t){
-				.type = BUXN_DBGX_MSG_SET_FOCUS,
-				.set_focus = {
-					.address = ctx->focus_address,
-				},
-			});
+			buxn_dbg_client_set_focus(ctx->client, ctx->focus_address);
 		}
 	}
 
@@ -319,10 +323,12 @@ handle_notification(buxn_dbgx_msg_t msg, void* userdata) {
 static int
 bio_main(void* userdata) {
 	args_t* args = userdata;
+	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "view:memory"));
 
 	mailbox_t mailbox;
 	bio_open_mailbox(&mailbox, 8);
 
+	buxn_dbgx_info_t info = { 0 };
 	buxn_dbg_client_t client;
 	if (!buxn_dbg_make_client_ex(
 		&client,
@@ -331,18 +337,16 @@ bio_main(void* userdata) {
 			.userdata = &mailbox,
 			.msg_handler = handle_notification,
 		},
-		&(buxn_dbgx_init_t){ .client_name = "view:memory" }
+		&(buxn_dbgx_init_t){
+			.client_name = "view:memory",
+			.subscriptions = BUXN_DBGX_SUB_INFO_PUSH | BUXN_DBGX_SUB_FOCUS,
+			.options = BUXN_DBGX_INIT_OPT_INFO,
+		},
+		&(buxn_dbgx_init_rep_t){
+			.info = &info
+		}
 	)) {
-		return 1;
-	}
-	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "view:memory"));
-
-	buxn_dbgx_info_t info = { 0 };
-	bio_call_status_t status = buxn_dbg_client_send(client, (buxn_dbgx_msg_t){
-		.type = BUXN_DBGX_MSG_INFO_REQ,
-		.info = &info,
-	});
-	if (status != BIO_CALL_OK) {
+		bio_close_mailbox(mailbox);
 		return 1;
 	}
 
