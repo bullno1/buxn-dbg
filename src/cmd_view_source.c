@@ -11,8 +11,6 @@
 
 typedef struct {
 	buxn_dbg_transport_info_t connect_transport;
-	const char* dbg_filename;
-	const char* src_dir;
 } args_t;
 
 typedef struct {
@@ -463,18 +461,11 @@ static int
 bio_main(void* userdata) {
 	args_t* args = userdata;
 
-	buxn_dbg_symtab_t* symtab = NULL;
-	if (args->dbg_filename != NULL) {
-		symtab = buxn_dbg_load_symbols(args->dbg_filename);
-	}
-	if (symtab == NULL) {
-		return 1;
-	}
-
 	mailbox_t mailbox;
 	bio_open_mailbox(&mailbox, 8);
 
 	buxn_dbgx_info_t info = { 0 };
+	buxn_dbgx_config_t config = { 0 };
 
 	buxn_dbg_client_t client;
 	if (!buxn_dbg_make_client_ex(
@@ -487,14 +478,25 @@ bio_main(void* userdata) {
 		&(buxn_dbgx_init_t){
 			.client_name = "view:source",
 			.subscriptions = BUXN_DBGX_SUB_INFO_PUSH | BUXN_DBGX_SUB_FOCUS,
-			.options = BUXN_DBGX_INIT_OPT_INFO,
+			.options = BUXN_DBGX_INIT_OPT_INFO | BUXN_DBGX_INIT_OPT_CONFIG,
 		},
 		&(buxn_dbgx_init_rep_t){
 			.info = &info,
+			.config = &config,
 		}
 	)) {
 		return 1;
 	}
+
+	buxn_dbg_symtab_t* symtab = NULL;
+	if (config.dbg_filename != NULL && config.src_dir != NULL) {
+		symtab = buxn_dbg_load_symbols(config.dbg_filename);
+	}
+	if (symtab == NULL) {
+		BIO_ERROR("Could not load debug file");
+		return 1;
+	}
+
 	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "view:source"));
 
 	source_set_t source_set;
@@ -523,7 +525,7 @@ bio_main(void* userdata) {
 				int len = snprintf(
 					path_buf, sizeof(path_buf),
 					"%s/%s",
-					args->src_dir, msg.load_source.name
+					config.src_dir, msg.load_source.name
 				);
 				if (len < 0 || len >= (int)sizeof(path_buf)) {
 					BIO_ERROR("Invalid source path");
@@ -634,9 +636,7 @@ end:
 }
 
 BUXN_DBG_CMD_EX(view_source, "view:source", "View the current source file") {
-	args_t args = {
-		.src_dir = ".",
-	};
+	args_t args = { 0 };
 	buxn_dbg_parse_transport("abstract-connect:buxn/dbg", &args.connect_transport);
 
 	barg_opt_t opts[] = {
@@ -647,22 +647,6 @@ BUXN_DBG_CMD_EX(view_source, "view:source", "View the current source file") {
 			.parser = barg_transport(&args.connect_transport),
 			.summary = "How to connect to the debug server",
 			.description = CONNECT_TRANSPORT_OPT_DESC,
-		},
-		{
-			.name = "dbg-file",
-			.short_name = 'd',
-			.value_name = "path",
-			.parser = barg_str(&args.dbg_filename),
-			.summary = "Path to the .rom.dbg file",
-		},
-		{
-			.name = "src-dir",
-			.short_name = 's',
-			.value_name = "path",
-			.parser = barg_str(&args.src_dir),
-			.summary = "The base directory to load sources from",
-			.description =
-				"Defaults to the current directory",
 		},
 		barg_opt_hidden_help(),
 	};
