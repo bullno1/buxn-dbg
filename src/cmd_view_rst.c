@@ -8,7 +8,6 @@
 
 typedef struct {
 	buxn_dbg_transport_info_t connect_transport;
-	const char* dbg_filename;
 } args_t;
 
 typedef enum {
@@ -281,6 +280,7 @@ bio_main(void* userdata) {
 	bio_open_mailbox(&mailbox, 8);
 
 	tui_ctx_t ui_ctx = { .main_mailbox = mailbox };
+	buxn_dbgx_config_t config = { 0 };
 
 	buxn_dbg_client_t client;
 	if (!buxn_dbg_make_client_ex(
@@ -293,10 +293,11 @@ bio_main(void* userdata) {
 		&(buxn_dbgx_init_t){
 			.client_name = "view:rst",
 			.subscriptions = BUXN_DBGX_SUB_INFO_PUSH | BUXN_DBGX_SUB_FOCUS,
-			.options = BUXN_DBGX_INIT_OPT_INFO,
+			.options = BUXN_DBGX_INIT_OPT_INFO | BUXN_DBGX_INIT_OPT_CONFIG,
 		},
 		&(buxn_dbgx_init_rep_t){
 			.info = &ui_ctx.vm_info,
+			.config = &config,
 		}
 	)) {
 		bio_close_mailbox(mailbox);
@@ -305,8 +306,8 @@ bio_main(void* userdata) {
 	ui_ctx.client = client;
 
 	buxn_dbg_symtab_t* symtab = NULL;
-	if (args->dbg_filename != NULL) {
-		ui_ctx.symtab = symtab = buxn_dbg_load_symbols(args->dbg_filename);
+	if (config.dbg_filename != NULL) {
+		ui_ctx.symtab = symtab = buxn_dbg_load_symbols(config.dbg_filename);
 	}
 	if (symtab == NULL) {
 		BIO_WARN("Return stack will not be annotated");
@@ -356,15 +357,6 @@ BUXN_DBG_CMD_EX(view_rst, "view:rst", "View the return stack") {
 			.parser = barg_transport(&args.connect_transport),
 			.summary = "How to connect to the debug server",
 			.description = CONNECT_TRANSPORT_OPT_DESC,
-		},
-		{
-			.name = "dbg-file",
-			.short_name = 'd',
-			.value_name = "path",
-			.parser = barg_str(&args.dbg_filename),
-			.summary = "Path to the .rom.dbg file",
-			.description =
-				"If not specified, the return stack with not be annotated.",
 		},
 		barg_opt_hidden_help(),
 	};
