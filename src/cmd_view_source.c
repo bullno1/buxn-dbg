@@ -642,14 +642,7 @@ BUXN_DBG_CMD_EX(view_source, "view:source", "View the current source file") {
 	buxn_dbg_parse_transport("abstract-connect:buxn/dbg", &args.connect_transport);
 
 	barg_opt_t opts[] = {
-		{
-			.name = "connect",
-			.short_name = 'c',
-			.value_name = "transport",
-			.parser = barg_transport(&args.connect_transport),
-			.summary = "How to connect to the debug server",
-			.description = CONNECT_TRANSPORT_OPT_DESC,
-		},
+		barg_connect_opt(&args.connect_transport),
 		barg_opt_hidden_help(),
 	};
 	barg_t barg = {

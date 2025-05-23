@@ -416,6 +416,18 @@ barg_opt_hidden_help(void) {
 	return opt;
 }
 
+barg_opt_t
+barg_connect_opt(buxn_dbg_transport_info_t* transport) {
+	return (barg_opt_t){
+		.name = "connect",
+		.short_name = 'c',
+		.value_name = "transport",
+		.parser = barg_transport(transport),
+		.summary = "How to connect to the debug server",
+		.description = CONNECT_TRANSPORT_OPT_DESC,
+	};
+}
+
 bserial_status_t
 bserial_str(bserial_ctx_t* ctx, const char** str_ptr, btmp_buf_t* tmp_buf) {
 	if (bserial_mode(ctx) == BSERIAL_MODE_READ) {

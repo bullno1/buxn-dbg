@@ -3,23 +3,6 @@
 
 #include <autolist.h>
 
-#define CONNECT_TRANSPORT_OPT_DESC \
-	"Default value: abstract-connect:buxn/dbg\n" \
-	"Available transports:\n\n" \
-	"* tcp-connect:<address>:<port>: Connect to an address\n" \
-	"* unix-connect:<name>: Connect to a unix domain socket\n" \
-	"* abstract-connect:<name>: Connect to an abstract socket\n" \
-
-#define LOG_LEVEL_OPT_DESC \
-	"Default level: info\n" \
-	"Valid levels:\n\n" \
-	"* trace\n" \
-	"* debug\n" \
-	"* info\n" \
-	"* warn\n" \
-	"* error\n" \
-	"* fatal\n"
-
 typedef struct buxn_dbg_cmd_entry_s buxn_dbg_cmd_entry_t;
 
 struct buxn_dbg_cmd_entry_s {

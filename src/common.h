@@ -10,6 +10,23 @@
 #define BUXN_CONTAINER_OF(ptr, type, member) \
 	((type *)((char *)(1 ? (ptr) : &((type *)0)->member) - offsetof(type, member)))
 
+#define CONNECT_TRANSPORT_OPT_DESC \
+	"Default value: abstract-connect:buxn/dbg\n" \
+	"Available transports:\n\n" \
+	"* tcp-connect:<address>:<port>: Connect to an address\n" \
+	"* unix-connect:<name>: Connect to a unix domain socket\n" \
+	"* abstract-connect:<name>: Connect to an abstract socket\n" \
+
+#define LOG_LEVEL_OPT_DESC \
+	"Default level: info\n" \
+	"Valid levels:\n\n" \
+	"* trace\n" \
+	"* debug\n" \
+	"* info\n" \
+	"* warn\n" \
+	"* error\n" \
+	"* fatal\n"
+
 typedef int (*bio_entry_fn_t)(void* userdata);
 
 typedef enum {
@@ -94,5 +111,8 @@ barg_log_level(bio_log_level_t* out);
 
 barg_opt_t
 barg_opt_hidden_help(void);
+
+barg_opt_t
+barg_connect_opt(buxn_dbg_transport_info_t* transport);
 
 #endif
