@@ -415,3 +415,25 @@ barg_opt_hidden_help(void) {
 	opt.hidden = true;
 	return opt;
 }
+
+bserial_status_t
+bserial_str(bserial_ctx_t* ctx, const char** str_ptr, btmp_buf_t* tmp_buf) {
+	if (bserial_mode(ctx) == BSERIAL_MODE_READ) {
+		uint64_t len = tmp_buf->size;
+		BSERIAL_CHECK_STATUS(bserial_blob_header(ctx, &len));
+		char* name_buf = buxn_tmp_buf_alloc_str(tmp_buf, len);
+		if (name_buf == NULL) { return BSERIAL_MALFORMED; }
+		BSERIAL_CHECK_STATUS(bserial_blob_body(ctx, name_buf));
+		if (len > 0) {
+			*str_ptr = name_buf;
+		} else {
+			*str_ptr = NULL;
+		}
+	} else {
+		char* str = (char*)*str_ptr;
+		uint64_t str_len = str != NULL ? strlen(str) : 0;
+		BSERIAL_CHECK_STATUS(bserial_blob(ctx, str, &str_len));
+	}
+
+	return BSERIAL_OK;
+}

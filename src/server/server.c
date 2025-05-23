@@ -439,19 +439,6 @@ buxn_dbg_client_request(buxn_dbg_client_controller_t* controller, buxn_dbgx_msg_
 				terminate_client(controller);
 			}
 		} break;
-		case BUXN_DBGX_MSG_LOG: {
-			if (msg.log.coro_name != NULL) {
-				bio_log(
-					msg.log.level, msg.log.file, msg.log.line,
-					"<%s>: %s", msg.log.coro_name, msg.log.msg
-				);
-			} else {
-				bio_log(
-					msg.log.level, msg.log.file, msg.log.line,
-					"%s", msg.log.msg
-				);
-			}
-		} break;
 		case BUXN_DBGX_MSG_INFO_REQ: {
 			*msg.info = controller->shared_ctx->vm_controller->info;
 			msg.type = BUXN_DBGX_MSG_INFO_REP;

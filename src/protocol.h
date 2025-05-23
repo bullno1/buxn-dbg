@@ -2,18 +2,28 @@
 #define BUXN_DBGX_PROTOCOL_H
 
 #include <buxn/dbg/protocol.h>
-#include <bio/bio.h>
 
 typedef enum {
 	BUXN_DBGX_MSG_BYE         = 0,
 	BUXN_DBGX_MSG_INIT        = 1,
-	BUXN_DBGX_MSG_CORE        = 2,
-	BUXN_DBGX_MSG_LOG         = 3,
-	BUXN_DBGX_MSG_INFO_REQ    = 4,
-	BUXN_DBGX_MSG_INFO_REP    = 5,
-	BUXN_DBGX_MSG_SET_FOCUS   = 6,
-	BUXN_DBGX_MSG_INFO_PUSH   = 7,
+	/*BUXN_DBGX_MSG_INIT_REP    = 2,*/
+	BUXN_DBGX_MSG_CORE        = 3,
+	BUXN_DBGX_MSG_INFO_REQ    = 5,
+	BUXN_DBGX_MSG_INFO_REP    = 6,
+	BUXN_DBGX_MSG_SET_FOCUS   = 7,
+	BUXN_DBGX_MSG_INFO_PUSH   = 8,
 } buxn_dbgx_msg_type_t;
+
+#define BUXN_DBGX_SUB_NONE        (0)
+#define BUXN_DBGX_SUB_INFO_PUSH   (1 << 0)
+#define BUXN_DBGX_SUB_VM_STATE    (1 << 1)
+#define BUXN_DBGX_SUB_CMD_MEM     (1 << 2)
+#define BUXN_DBGX_SUB_CMD_DEV     (1 << 3)
+#define BUXN_DBGX_SUB_CMD_BRKP    (1 << 4)
+
+#define BUXN_DBGX_OPT_NONE        (0)
+#define BUXN_DBGX_OPT_INFO        (1 << 0)
+#define BUXN_DBGX_OPT_FILES       (1 << 1)
 
 typedef struct {
 	uint16_t vector_addr;
@@ -26,7 +36,19 @@ typedef struct {
 
 typedef struct {
 	const char* client_name;
+	uint32_t subscriptions;
+	uint32_t options;
 } buxn_dbgx_init_t;
+
+typedef struct {
+	const char* dbg_filename;
+	const char* src_dir;
+} buxn_dbgx_support_files_t;
+
+typedef struct {
+	buxn_dbgx_info_t* info;
+	buxn_dbgx_support_files_t* support_files;
+} buxn_dbgx_init_rep_t;
 
 typedef struct {
 	uint16_t address;
@@ -39,14 +61,6 @@ typedef struct {
 		buxn_dbg_msg_t core;
 		buxn_dbgx_info_t* info;
 		buxn_dbgx_info_t info_push;
-
-		struct {
-			bio_log_level_t level;
-			const char* coro_name;
-			int line;
-			const char* file;
-			const char* msg;
-		} log;
 
 		buxn_dbgx_set_focus_t set_focus;
 	};

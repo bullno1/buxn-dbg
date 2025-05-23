@@ -113,13 +113,14 @@ buxn_tui_execute_step(const struct tb_event* event, buxn_dbg_client_t client) {
 	bool do_step = false;
 	buxn_dbg_cmd_type_t step = BUXN_DBG_CMD_STEP_IN;
 	if (event->type == TB_EVENT_KEY) {
-		if (event->ch == 's') {
+		// Control following pdb convention
+		if (event->ch == 's') {  // (s)tep (in)
 			step = BUXN_DBG_CMD_STEP_IN;
 			do_step = true;
-		} else if (event->ch == 'n') {
+		} else if (event->ch == 'n') {  // (n)ext (step over)
 			step = BUXN_DBG_CMD_STEP_OVER;
 			do_step = true;
-		} else if (event->ch == 'r') {
+		} else if (event->ch == 'r') {  // (r)eturn (step out)
 			step = BUXN_DBG_CMD_STEP_OUT;
 			do_step = true;
 		}

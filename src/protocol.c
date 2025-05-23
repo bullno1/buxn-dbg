@@ -96,31 +96,6 @@ buxn_dbgx_protocol_msg_body(
 		case BUXN_DBGX_MSG_CORE:
 			BSERIAL_CHECK_STATUS(buxn_dbg_protocol_msg(ctx, buffer, &msg->core));
 			break;
-		case BUXN_DBGX_MSG_LOG: {
-			BSERIAL_RECORD(ctx, &msg->log) {
-				BSERIAL_KEY(ctx, level) {
-					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->log.level));
-				}
-				BSERIAL_KEY(ctx, coro_name) {
-					BSERIAL_CHECK_STATUS(
-						buxn_dbgx_str(ctx, &str_buf, str_buf_max, &msg->log.coro_name)
-					);
-				}
-				BSERIAL_KEY(ctx, file) {
-					BSERIAL_CHECK_STATUS(
-						buxn_dbgx_str(ctx, &str_buf, str_buf_max, &msg->log.file)
-					);
-				}
-				BSERIAL_KEY(ctx, line) {
-					BSERIAL_CHECK_STATUS(bserial_any_int(ctx, &msg->log.line));
-				}
-				BSERIAL_KEY(ctx, msg) {
-					BSERIAL_CHECK_STATUS(
-						buxn_dbgx_str(ctx, &str_buf, str_buf_max, &msg->log.msg)
-					);
-				}
-			}
-		} break;
 		case BUXN_DBGX_MSG_INFO_REQ:
 			if (bserial_mode(ctx) == BSERIAL_MODE_READ) {
 				msg->info = buxn_dbgx_protocol_alloc(buffer, _Alignof(buxn_dbgx_info_t));

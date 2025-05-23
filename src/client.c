@@ -181,7 +181,6 @@ buxn_dbg_client_send(buxn_dbg_client_t client, buxn_dbgx_msg_t msg) {
 		msg.type == BUXN_DBGX_MSG_INIT
 		|| msg.type == BUXN_DBGX_MSG_BYE
 		|| msg.type == BUXN_DBGX_MSG_CORE
-		|| msg.type == BUXN_DBGX_MSG_LOG
 		|| msg.type == BUXN_DBGX_MSG_INFO_REQ
 	) {
 		bio_signal_t cancel_signal = { 0 };

@@ -5,6 +5,7 @@
 #include <bio/file.h>
 #include <bserial.h>
 #include "barg.h"
+#include "btmp_buf.h"
 
 #define BUXN_CONTAINER_OF(ptr, type, member) \
 	((type *)((char *)(1 ? (ptr) : &((type *)0)->member) - offsetof(type, member)))
@@ -69,6 +70,9 @@ bserial_file_io_init(bserial_file_io_t* io, bio_file_t file);
 
 void
 bserial_socket_io_init(bserial_socket_io_t* io, bio_socket_t socket);
+
+bserial_status_t
+bserial_str(bserial_ctx_t* ctx, const char** str_ptr, btmp_buf_t* tmp_buf);
 
 bserial_io_t*
 buxn_dbg_make_bserial_io_from_socket(bio_socket_t socket);
