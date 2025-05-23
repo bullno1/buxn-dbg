@@ -1,7 +1,6 @@
 #ifdef __linux__
 #define _GNU_SOURCE
 #include <stdlib.h>
-#include <sys/socket.h>
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
@@ -15,8 +14,10 @@
 #include "../protocol.h"
 #include "../logger.h"
 #include "../symbol.h"
+#include <time.h>
 #include <bio/mailbox.h>
 #include <string.h>
+#include <buxn/dbg/transports/stream.h>
 
 #define MAX_CLIENTS 32
 
@@ -215,23 +216,28 @@ buxn_dbg_server_wrap(
 	bio_socket_t* conn_socket
 ) {
 #ifdef __linux__
-	int sockpair[2];
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockpair) < 0) {
-		BIO_ERROR("Failed to create socketpair: %s", strerror(errno));
-		return false;
+	// Generate a random transport address for the wrapped process
+	char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+	char server_sock_name[] = "@buxn/wrap/0123456789";
+	char vm_sock_name[] = "buxn/wrap/0123456789";
+
+	srand(time(NULL));
+	for (int i = 0; i < 10; ++i) {
+		char random_char = charset[rand() % (sizeof(charset) - 1)];
+		server_sock_name[i + sizeof("@buxn/wrap/") - 1] = random_char;
+		vm_sock_name[i + sizeof("buxn/wrap/") - 1] = random_char;
 	}
 
-	// Use net logger from this point since we relinquish std streams to the
-	// child.
-	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "view:rst"));
+	BIO_DEBUG("Using %s for connection", server_sock_name);
 
 	pid_t child_proc = fork();
 	if (child_proc == 0) {  // Child
 		prctl(PR_SET_PDEATHSIG, SIGTERM);
 		signal(SIGPIPE, SIG_IGN);
+		int fd = buxn_dbg_transport_abstract_connect(vm_sock_name);
 
 		char buf[sizeof("2147483647")];
-		snprintf(buf, sizeof(buf), "%d", sockpair[1]);
+		snprintf(buf, sizeof(buf), "%d", fd);
 		setenv("BUXN_DBG_FD", buf, 1);
 
 		if (execvp(argv[0], (char**)argv) < 0) {
@@ -239,8 +245,23 @@ buxn_dbg_server_wrap(
 		}
 		return false;  // Unreachable
 	} else if (child_proc > 0) {  // Parent
-		*conn_socket = bio_net_wrap_fd(sockpair[0]);
-		return true;
+		// Use net logger from this point since we relinquish std streams to the
+		// child.
+		buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "server"));
+		buxn_dbg_transport_info_t info = {
+			.type = BUXN_DBG_TRANSPORT_NET_LISTEN,
+			.net = {
+				.addr = {
+					.type = BIO_ADDR_NAMED,
+					.named = {
+						.len = sizeof(server_sock_name) - 1,
+					},
+				},
+				.port = BIO_PORT_ANY,
+			},
+		};
+		memcpy(&info.net.addr.named.name, server_sock_name, sizeof(server_sock_name) - 1);
+		return buxn_dbg_server_connect(info, NULL, conn_socket);
 	} else {  // Failure
 		BIO_ERROR("Could not fork: %s", strerror(errno));
 		return false;

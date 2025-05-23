@@ -30,4 +30,5 @@ target_link_libraries(
 	termbox2
 	buxn-dbg-core
 	buxn-dbg-protocol
+	buxn-dbg-transport-stream
 )
