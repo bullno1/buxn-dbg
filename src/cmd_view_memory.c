@@ -335,7 +335,7 @@ bio_main(void* userdata) {
 	)) {
 		return 1;
 	}
-	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE));
+	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "view:memory"));
 
 	buxn_dbgx_info_t info = { 0 };
 	bio_call_status_t status = buxn_dbg_client_send(client, (buxn_dbgx_msg_t){

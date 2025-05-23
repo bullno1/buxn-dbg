@@ -11,7 +11,7 @@ static int
 bio_main(void* userdata) {
 	args_t* args = userdata;
 
-	bio_logger_t logger = buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE);
+	bio_logger_t logger = buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "dev:log");
 	BIO_LOG(args->log_level, "%s", args->log_msg);
 	bio_remove_logger(logger);
 

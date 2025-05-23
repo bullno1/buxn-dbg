@@ -8,9 +8,9 @@
 #define BUXN_DBG_LOG_SOCKET "@buxn/log"
 
 static const bserial_ctx_config_t buxn_log_bserial_config = {
-	.max_symbol_len = 7,
-	.max_num_symbols = 5,
-	.max_record_fields = 5,
+	.max_symbol_len = 0,
+	.max_num_symbols = 0,
+	.max_record_fields = 0,
 	.max_depth = 3,
 };
 
@@ -30,6 +30,6 @@ buxn_dbg_serialize_log_msg(
 );
 
 bio_logger_t
-buxn_dbg_add_net_logger(bio_log_level_t min_level);
+buxn_dbg_add_net_logger(bio_log_level_t min_level, const char* name);
 
 #endif

@@ -90,7 +90,7 @@ bio_main(void* userdata) {
 	)) {
 		return 1;
 	}
-	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE));
+	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "view:wst"));
 
 	tui_ctx_t ui_ctx = {
 		.main_mailbox = mailbox,

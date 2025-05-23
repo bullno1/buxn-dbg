@@ -18,7 +18,19 @@ client_entry(void* userdata) {
 	void* bserial_mem = buxn_dbg_malloc(bserial_ctx_mem_size(buxn_log_bserial_config));
 	bserial_ctx_t* bserial_in = bserial_make_ctx(bserial_mem, buxn_log_bserial_config, &io.in, NULL);
 
-	while (true) {
+	// Receive name
+	bool should_run = false;
+	char name_buf[64];
+	{
+		btmp_buf_t tmp_buf = { .mem = name_buf, .size = sizeof(name_buf) };
+		const char* name = NULL;
+		if (bserial_str(bserial_in, &name, &tmp_buf) == BSERIAL_OK) {
+			if (name != NULL) { bio_set_coro_name(name); }
+			should_run = true;
+		}
+	}
+
+	while (should_run) {
 		char msg_buf[1024];
 		buxn_dbg_log_msg_t msg = { 0 };
 		btmp_buf_t tmp_buf = { .mem = msg_buf, .size = sizeof(msg_buf) };
