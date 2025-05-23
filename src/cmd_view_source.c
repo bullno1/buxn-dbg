@@ -485,6 +485,7 @@ bio_main(void* userdata) {
 			.config = &config,
 		}
 	)) {
+		bio_close_mailbox(mailbox);
 		return 1;
 	}
 
@@ -494,6 +495,7 @@ bio_main(void* userdata) {
 	}
 	if (symtab == NULL) {
 		BIO_ERROR("Could not load debug file");
+		bio_close_mailbox(mailbox);
 		return 1;
 	}
 

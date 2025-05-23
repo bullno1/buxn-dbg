@@ -274,7 +274,6 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 static int
 bio_main(void* userdata) {
 	args_t* args = userdata;
-	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "view:rst"));
 
 	mailbox_t mailbox;
 	bio_open_mailbox(&mailbox, 8);
@@ -304,6 +303,8 @@ bio_main(void* userdata) {
 		return 1;
 	}
 	ui_ctx.client = client;
+
+	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "view:rst"));
 
 	buxn_dbg_symtab_t* symtab = NULL;
 	if (config.dbg_filename != NULL) {

@@ -322,7 +322,6 @@ handle_notification(buxn_dbgx_msg_t msg, void* userdata) {
 static int
 bio_main(void* userdata) {
 	args_t* args = userdata;
-	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "view:memory"));
 
 	mailbox_t mailbox;
 	bio_open_mailbox(&mailbox, 8);
@@ -350,6 +349,8 @@ bio_main(void* userdata) {
 		bio_close_mailbox(mailbox);
 		return 1;
 	}
+
+	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "view:memory"));
 
 	buxn_dbg_symtab_t* symtab = NULL;
 	if (config.dbg_filename != NULL) {
