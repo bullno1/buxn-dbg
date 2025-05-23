@@ -167,11 +167,9 @@ client_entry(void* userdata) {
 					},
 				};
 				barray_push(ctx.pending_cmds, msg, NULL);
-				BIO_TRACE("Send");
 				if (buxn_dbgx_protocol_msg(io->out, NULL, &dbg_cmd) != BSERIAL_OK) {
 					goto end;
 				}
-				BIO_TRACE("Sent");
 			} break;
 			case CLIENT_MSG_SET_FOCUS: {
 				buxn_dbgx_msg_t set_focus = {

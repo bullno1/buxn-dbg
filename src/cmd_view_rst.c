@@ -264,6 +264,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 		}
 
 		if (moved && next_focus != ctx->vm_info.focus) {
+			ctx->vm_info.focus = next_focus;
 			buxn_dbg_client_set_focus(ctx->client, next_focus);
 		}
 	}
@@ -301,6 +302,7 @@ bio_main(void* userdata) {
 		bio_close_mailbox(mailbox);
 		return 1;
 	}
+	ui_ctx.client = client;
 
 	buxn_dbg_symtab_t* symtab = NULL;
 	if (args->dbg_filename != NULL) {

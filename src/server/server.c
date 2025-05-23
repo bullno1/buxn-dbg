@@ -96,15 +96,19 @@ static void
 broadcast_to_clients(
 	buxn_dbg_client_controller_t* clients,
 	buxn_dbgx_msg_t msg,
+	uint32_t mask,
 	int exclude_client
 ) {
 	for (int i = 0; i < MAX_CLIENTS; ++i) {
-		if (clients[i].id != -1 && i != exclude_client) {
+		buxn_dbg_client_controller_t* client = &clients[i];
+		if (
+			client->id != -1
+			&& i != exclude_client
+			&& client->initialized
+			&& ((client->subscriptions & mask) > 0)
+		) {
 			if (!buxn_dbg_notify_client_async(clients[i].client, msg)) {
-				BIO_WARN(
-					"Client %d takes too long to process messages",
-					i
-				);
+				BIO_WARN("Client %d takes too long to process messages", i);
 				buxn_dbg_stop_client_handler(clients[i].client);
 			}
 		}
@@ -302,14 +306,24 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 						.type = BUXN_DBGX_MSG_INFO_PUSH,
 						.info_push = vm_controller.info,
 					};
-					broadcast_to_clients(clients, info_push, -1);
+					broadcast_to_clients(
+						clients,
+						info_push,
+						BUXN_DBGX_SUB_INFO_PUSH,
+						-1
+					);
 				}
 
 				buxn_dbgx_msg_t notification = {
 					.type = BUXN_DBGX_MSG_CORE,
 					.core = vm_msg,
 				};
-				broadcast_to_clients(clients, notification, -1);
+				broadcast_to_clients(
+					clients,
+					notification,
+					BUXN_DBGX_SUB_VM_STATE,
+					-1
+				);
 			} break;
 			case SERVER_MSG_VM_DISCONNECTED:
 				BIO_WARN("VM disconnected, terminating");
@@ -344,7 +358,12 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 					.type = BUXN_DBGX_MSG_SET_FOCUS,
 					.set_focus = { .address = msg.set_focus.address },
 				};
-				broadcast_to_clients(clients, notification, msg.set_focus.client_id);
+				broadcast_to_clients(
+					clients,
+					notification,
+					BUXN_DBGX_SUB_FOCUS,
+					msg.set_focus.client_id
+				);
 			} break;
 			case SERVER_MSG_CLIENT_TERMINATED: {
 				BIO_INFO("Client %d disconnected", msg.client_terminated.id);
