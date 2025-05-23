@@ -3,9 +3,7 @@
 #include "server/server.h"
 
 BUXN_DBG_CMD(server, "Start a debug server") {
-	buxn_dbg_server_args_t args = {
-		.config.src_dir = "./",
-	};
+	buxn_dbg_server_args_t args = { 0 };
 	buxn_dbg_parse_transport("abstract-connect:buxn/vm", &args.connect_transport);
 	buxn_dbg_parse_transport("abstract-listen:buxn/dbg", &args.listen_transport);
 
@@ -31,7 +29,7 @@ BUXN_DBG_CMD(server, "Start a debug server") {
 			.name = "listen",
 			.short_name = 'l',
 			.value_name = "transport",
-			.parser = barg_connect_transport(&args.connect_transport),
+			.parser = barg_listen_transport(&args.connect_transport),
 			.summary = "How to listen for debug clients",
 			.description =
 				"Default value: abstract-listen:buxn/dbg\n"
@@ -47,7 +45,8 @@ BUXN_DBG_CMD(server, "Start a debug server") {
 			.parser = barg_str(&args.config.dbg_filename),
 			.summary = "Path to the .rom.dbg file",
 			.description =
-				"If not specified, several features will not be available",
+				"If not specified, several features will not be available.\n"
+				"In \"wrapper mode\" the server will try to guess the debug file path from the command.\n",
 		},
 		{
 			.name = "src-dir",
@@ -56,15 +55,23 @@ BUXN_DBG_CMD(server, "Start a debug server") {
 			.parser = barg_str(&args.config.src_dir),
 			.summary = "The base directory to load sources from",
 			.description =
-				"Defaults to the current directory",
+				"If not provided, the server will try to detect it from the debug file's path.\n"
+				"If it can't be detected, this will default to the current directory.",
 		},
 		barg_opt_hidden_help(),
 	};
 	barg_t barg = {
-		.usage = "buxn-dbg server [options]",
-		.summary = self->description,
+		.usage = "buxn-dbg server [options] [--] [cmd]",
+		.summary =
+			"Start a debug server\n"
+			"\n"
+			"If a command is provided after options, the server will execute in \"wrapper mode\".\n"
+			"It executes the provided command and attach to the buxn VM in the launched process.\n"
+			"This is the equivalent of running both `buxn-dbg-wrapper` and `buxn-dbg --connect`.\n"
+			"Take note that --connect will be ignored in this case.",
 		.opts = opts,
 		.num_opts = sizeof(opts) / sizeof(opts[0]),
+		.allow_positional = true,
 	};
 
 	barg_result_t result = barg_parse(&barg, argc, argv);
@@ -72,6 +79,9 @@ BUXN_DBG_CMD(server, "Start a debug server") {
 		barg_print_result(&barg, result, stderr);
 		return result.status == BARG_PARSE_ERROR;
 	}
+
+	args.argc = argc - result.arg_index;
+	args.argv = argv + result.arg_index;
 
 	return bio_enter(buxn_dbg_server_entry, &args);
 }

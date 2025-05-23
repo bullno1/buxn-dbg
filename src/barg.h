@@ -376,22 +376,27 @@ barg_print_help(barg_t* barg, FILE* file) {
 		fprintf(file, "Usage: %s\n", barg->usage);
 	}
 
-	bool opt_list_needs_separator = false;
 	if (barg->summary != NULL) {
 		if (barg->usage != NULL) {
 			fprintf(file, "\n");
 		}
 		fprintf(file, "%s\n", barg->summary);
-		opt_list_needs_separator = true;
 	}
 
+	bool printed_header = false;
 	for (int i = 0; i < barg->num_opts; ++i) {
 		const barg_opt_t* opt = &barg->opts[i];
 		if (opt->hidden) { continue; }
 
-		if (opt_list_needs_separator) {
-			fprintf(file, "\n");
+		if (!printed_header) {
+			if (barg->summary != NULL) {
+				fprintf(file, "\n");
+			}
+			fprintf(file, "Options:\n");
+			printed_header = true;
 		}
+
+		fprintf(file, "\n");
 
 		if (opt->short_name != 0) {
 			fprintf(file, "-%c", opt->short_name);
@@ -430,8 +435,6 @@ barg_print_help(barg_t* barg, FILE* file) {
 				line_start = *line_end == '\0' ? line_end : line_end + 1;
 			}
 		}
-
-		opt_list_needs_separator = true;
 	}
 }
 

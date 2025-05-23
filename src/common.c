@@ -422,7 +422,7 @@ barg_connect_opt(buxn_dbg_transport_info_t* transport) {
 		.name = "connect",
 		.short_name = 'c',
 		.value_name = "transport",
-		.parser = barg_transport(transport),
+		.parser = barg_connect_transport(transport),
 		.summary = "How to connect to the debug server",
 		.description = CONNECT_TRANSPORT_OPT_DESC,
 	};

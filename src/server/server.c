@@ -1,13 +1,22 @@
 #ifdef __linux__
 #define _GNU_SOURCE
 #include <stdlib.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <errno.h>
+#include <signal.h>
+#include <linux/prctl.h>
+#include <sys/prctl.h>
 #endif
 
 #include "server.h"
 #include "client.h"
 #include "vm.h"
 #include "../protocol.h"
+#include "../logger.h"
+#include "../symbol.h"
 #include <bio/mailbox.h>
+#include <string.h>
 
 #define MAX_CLIENTS 32
 
@@ -121,49 +130,34 @@ broadcast_to_clients(
 	}
 }
 
-int
-buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
-	bio_set_coro_name("server");
-	buxn_dbg_server_args_t* args = userdata;
-
-	buxn_dbgx_config_t config = args->config;
-
-#ifdef __linux__
-	// Use absolute path so that clients can open files from any dir
-	if (config.dbg_filename != NULL) {
-		config.dbg_filename = realpath(config.dbg_filename, NULL);
-	}
-
-	if (config.src_dir != NULL) {
-		config.src_dir = realpath(config.src_dir, NULL);
-	}
-#endif
-
-	// Connect to VM
+static bool
+buxn_dbg_server_connect(
+	buxn_dbg_transport_info_t connect_transport,
+	bio_file_t* conn_file,
+	bio_socket_t* conn_socket
+) {
 	bio_error_t error = { 0 };
-	bio_file_t vm_conn_file = { 0 };
-	bio_socket_t vm_conn_socket = { 0 };
-	switch (args->connect_transport.type) {
+	switch (connect_transport.type) {
 		case BUXN_DBG_TRANSPORT_FILE: {
-			BIO_INFO("Opening %s", args->connect_transport.file);
+			BIO_INFO("Opening %s", connect_transport.file);
 			bio_file_t file;
-			if (!bio_fopen(&file, args->connect_transport.file, "r+", &error)) {
+			if (!bio_fopen(&file, connect_transport.file, "r+", &error)) {
 				BIO_ERROR(
 					"Error while opening: %s (" BIO_ERROR_FMT ")",
-					args->connect_transport.file,
+					connect_transport.file,
 					BIO_ERROR_FMT_ARGS(&error)
 				);
-				return 1;
+				return false;
 			}
-			vm_conn_file = file;
+			*conn_file = file;
 		} break;
 		case BUXN_DBG_TRANSPORT_NET_LISTEN: {
 			BIO_INFO("Waiting for connection from VM");
 			bio_socket_t server;
 			if (!bio_net_listen(
 				BIO_SOCKET_STREAM,
-				&args->connect_transport.net.addr,
-				args->connect_transport.net.port,
+				&connect_transport.net.addr,
+				connect_transport.net.port,
 				&server,
 				&error
 			)) {
@@ -171,7 +165,7 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 					"Error while listening: (" BIO_ERROR_FMT ")",
 					BIO_ERROR_FMT_ARGS(&error)
 				);
-				return 1;
+				return false;
 			}
 
 			bio_socket_t client;
@@ -181,35 +175,200 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 					BIO_ERROR_FMT_ARGS(&error)
 				);
 				bio_net_close(server, NULL);
-				return 1;
+				return false;
 			}
 			BIO_INFO("VM connected");
 
 			bio_net_close(server, NULL);
-			vm_conn_socket = client;
+			*conn_socket = client;
 		} break;
 		case BUXN_DBG_TRANSPORT_NET_CONNECT: {
 			BIO_INFO("Connecting to VM");
 			bio_socket_t sock;
 			if (!bio_net_connect(
 				BIO_SOCKET_STREAM,
-				&args->connect_transport.net.addr,
-				args->connect_transport.net.port,
+				&connect_transport.net.addr,
+				connect_transport.net.port,
 				&sock,
 				&error
 			)) {
 				BIO_ERROR(
-					"Error while connecting: (" BIO_ERROR_FMT ")",
+					"Error while connecting: " BIO_ERROR_FMT,
 					BIO_ERROR_FMT_ARGS(&error)
 				);
-				return 1;
+				return false;
 			}
 			BIO_INFO("Connected to VM");
-			vm_conn_socket = sock;
+			*conn_socket = sock;
 		} break;
 		default:
-			BIO_ERROR("Unknown transport type: %d", args->connect_transport.type);
-			return 1;
+			BIO_ERROR("Unknown transport type: %d", connect_transport.type);
+			return false;
+	}
+
+	return true;
+}
+
+static bool
+buxn_dbg_server_wrap(
+	int argc, const char** argv,
+	bio_socket_t* conn_socket
+) {
+#ifdef __linux__
+	int sockpair[2];
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockpair) < 0) {
+		BIO_ERROR("Failed to create socketpair: %s", strerror(errno));
+		return false;
+	}
+
+	// Use net logger from this point since we relinquish std streams to the
+	// child.
+	buxn_dbg_set_logger(buxn_dbg_add_net_logger(BIO_LOG_LEVEL_TRACE, "view:rst"));
+
+	pid_t child_proc = fork();
+	if (child_proc == 0) {  // Child
+		prctl(PR_SET_PDEATHSIG, SIGTERM);
+		signal(SIGPIPE, SIG_IGN);
+
+		char buf[sizeof("2147483647")];
+		snprintf(buf, sizeof(buf), "%d", sockpair[1]);
+		setenv("BUXN_DBG_FD", buf, 1);
+
+		if (execvp(argv[0], (char**)argv) < 0) {
+			exit(1);
+		}
+		return false;  // Unreachable
+	} else if (child_proc > 0) {  // Parent
+		*conn_socket = bio_net_wrap_fd(sockpair[0]);
+		return true;
+	} else {  // Failure
+		BIO_ERROR("Could not fork: %s", strerror(errno));
+		return false;
+	}
+#else
+	BIO_ERROR("Not supported");
+	return false;
+#endif
+}
+
+static bool
+str_ends_with(const char *str, const char *suffix) {
+	size_t lenstr = strlen(str);
+	size_t lensuffix = strlen(suffix);
+	if (lensuffix >  lenstr) { return false; }
+	return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
+}
+
+int
+buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
+	bio_set_coro_name("server");
+	buxn_dbg_server_args_t* args = userdata;
+
+	buxn_dbgx_config_t config = args->config;
+
+	char dbg_filename_buf[1024];
+	if (args->argc > 1 && config.dbg_filename == NULL) {
+		BIO_DEBUG("Guessing path to .rom.dbg file from command");
+
+		for (int i = 1; i < args->argc; ++i) {
+			const char* arg = args->argv[i];
+			if (str_ends_with(arg, ".rom")) {
+				BIO_DEBUG("Trying %s.dbg", arg);
+
+				int len = snprintf(
+					dbg_filename_buf,
+					sizeof(dbg_filename_buf),
+					"%s.dbg",
+					args->argv[i]
+				);
+				if (len > 0 && len < (int)sizeof(dbg_filename_buf)) {
+					bio_file_t file;
+					if (bio_fopen(&file, dbg_filename_buf, "r", NULL)) {
+						config.dbg_filename = dbg_filename_buf;
+						BIO_DEBUG("Picking %s", dbg_filename_buf);
+						bio_fclose(file, NULL);
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	// Use absolute path so that clients can open files from any dir
+	if (config.dbg_filename != NULL) {
+		config.dbg_filename = realpath(config.dbg_filename, NULL);
+	}
+
+	char src_dir_buf[1024];
+	// Try to guess the source directory from the .rom.dbg file
+	if (config.src_dir == NULL && config.dbg_filename != NULL) {
+		BIO_DEBUG("Guessing path to source directory from debug info file");
+
+		buxn_dbg_symtab_t* symtab = buxn_dbg_load_symbols(config.dbg_filename);
+		if (symtab != NULL) {
+			// Pick the first source file
+			const char* src_file = NULL;
+			for (int i = 0; i < symtab->num_symbols; ++i) {
+				if (symtab->symbols[i].region.filename != NULL) {
+					src_file = symtab->symbols[i].region.filename;
+				}
+			}
+
+			// Try to search upward from the path of debug file
+			int path_len = (int)strlen(config.dbg_filename);
+			for (int i = path_len - 1; i >= 1; --i) {
+				char ch = config.dbg_filename[i];
+				if (ch == '/' || ch == '\\') {
+					int len = snprintf(
+						src_dir_buf,
+						sizeof(src_dir_buf),
+						"%.*s/%s",
+						i, config.dbg_filename,
+						src_file
+					);
+					if (len > 0 && len < (int)sizeof(src_dir_buf)) {
+						BIO_DEBUG("Trying %s", src_dir_buf);
+						bio_file_t file;
+						if (bio_fopen(&file, src_dir_buf, "r", NULL)) {
+							src_dir_buf[i] = '\0';
+
+							BIO_DEBUG("Picking %s", src_dir_buf);
+							config.src_dir = src_dir_buf;
+							bio_fclose(file, NULL);
+							break;
+						}
+					}
+				}
+			}
+
+			buxn_dbg_unload_symbols(symtab);
+		} else {
+			BIO_WARN("Could not open debug info file");
+		}
+	}
+
+	if (config.src_dir != NULL) {
+		config.src_dir = realpath(config.src_dir, NULL);
+	} else {
+		config.src_dir = realpath("./", NULL);
+	}
+
+	// Connect to VM
+	bio_error_t error = { 0 };
+	bio_file_t vm_conn_file = { 0 };
+	bio_socket_t vm_conn_socket = { 0 };
+	bool should_run;
+	if (args->argc == 0) {  // Connect mode
+		should_run = buxn_dbg_server_connect(
+			args->connect_transport,
+			&vm_conn_file,
+			&vm_conn_socket
+		);
+	} else {  // Wrapper mode
+		should_run = buxn_dbg_server_wrap(
+			args->argc, args->argv,
+			&vm_conn_socket
+		);
 	}
 
 	// Create bserial context for VM
@@ -234,7 +393,6 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 	}
 
 	// Server states
-	bool should_run = true;
 
 	server_mailbox_t mailbox;
 	bio_open_mailbox(&mailbox, 32);
@@ -253,7 +411,7 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 
 	// Spawn acceptor coro
 	bio_socket_t server_socket = { 0 };
-	if (!bio_net_listen(
+	if (should_run && !bio_net_listen(
 		BIO_SOCKET_STREAM,
 		&args->listen_transport.net.addr,
 		args->listen_transport.net.port,

@@ -9,6 +9,8 @@ typedef struct {
 	buxn_dbg_transport_info_t connect_transport;
 	buxn_dbg_transport_info_t listen_transport;
 	buxn_dbgx_config_t config;
+	int argc;
+	const char** argv;
 } buxn_dbg_server_args_t;
 
 int
