@@ -19,7 +19,7 @@ typedef enum {
 
 #define BUXN_DBGX_INIT_OPT_NONE        (0)
 #define BUXN_DBGX_INIT_OPT_INFO        (1 << 0)
-#define BUXN_DBGX_INIT_OPT_SUPP_FILES  (1 << 1)
+#define BUXN_DBGX_INIT_OPT_CONFIG      (1 << 1)
 
 typedef struct {
 	uint16_t vector_addr;
@@ -33,7 +33,7 @@ typedef struct {
 typedef struct {
 	const char* dbg_filename;
 	const char* src_dir;
-} buxn_dbgx_support_files_t;
+} buxn_dbgx_config_t;
 
 typedef struct {
 	const char* client_name;
@@ -43,7 +43,7 @@ typedef struct {
 
 typedef struct {
 	buxn_dbgx_info_t* info;
-	buxn_dbgx_support_files_t* support_files;
+	buxn_dbgx_config_t* config;
 } buxn_dbgx_init_rep_t;
 
 typedef struct {

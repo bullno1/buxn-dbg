@@ -3,7 +3,9 @@
 #include "server/server.h"
 
 BUXN_DBG_CMD(server, "Start a debug server") {
-	buxn_dbg_server_args_t args;
+	buxn_dbg_server_args_t args = {
+		.config.src_dir = "./",
+	};
 	buxn_dbg_parse_transport("abstract-connect:buxn/vm", &args.connect_transport);
 	buxn_dbg_parse_transport("abstract-listen:buxn/dbg", &args.listen_transport);
 
@@ -37,6 +39,24 @@ BUXN_DBG_CMD(server, "Start a debug server") {
 				"* tcp-listen:<port>: Listen on a tcp port\n"
 				"* unix-listen:<name>: Listen on a unix domain socket\n"
 				"* abstract-listen:<name>: Listen on an abstract socket\n",
+		},
+		{
+			.name = "dbg-file",
+			.short_name = 'd',
+			.value_name = "path",
+			.parser = barg_str(&args.config.dbg_filename),
+			.summary = "Path to the .rom.dbg file",
+			.description =
+				"If not specified, several features will not be available",
+		},
+		{
+			.name = "src-dir",
+			.short_name = 's',
+			.value_name = "path",
+			.parser = barg_str(&args.config.src_dir),
+			.summary = "The base directory to load sources from",
+			.description =
+				"Defaults to the current directory",
 		},
 		barg_opt_hidden_help(),
 	};

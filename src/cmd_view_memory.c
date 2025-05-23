@@ -23,7 +23,6 @@ static const char* opcode_names[256] = {
 
 typedef struct {
 	buxn_dbg_transport_info_t connect_transport;
-	const char* dbg_filename;
 } args_t;
 
 typedef struct {
@@ -162,7 +161,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			uintattr_t foreground = TB_DEFAULT;
 
 			if (symbol == NULL) {
-				foreground = TB_DEFAULT | TB_DIM;
+				foreground = ctx->symtab != NULL ? TB_DEFAULT | TB_DIM : TB_DEFAULT;
 			} else if (symbol->type == BUXN_DBG_SYM_TEXT) {
 				foreground = TB_GREEN;
 			} else if (symbol->type == BUXN_DBG_SYM_OPCODE) {
@@ -244,7 +243,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			if (focused_byte_is_known) {
 				tb_printf(
 					0, 0,
-					TB_DEFAULT | TB_DIM,
+					TB_DEFAULT,
 					TB_DEFAULT,
 					"Opcode: %s", opcode_names[focused_byte]
 				);
@@ -329,6 +328,7 @@ bio_main(void* userdata) {
 	bio_open_mailbox(&mailbox, 8);
 
 	buxn_dbgx_info_t info = { 0 };
+	buxn_dbgx_config_t config = { 0 };
 	buxn_dbg_client_t client;
 	if (!buxn_dbg_make_client_ex(
 		&client,
@@ -340,10 +340,11 @@ bio_main(void* userdata) {
 		&(buxn_dbgx_init_t){
 			.client_name = "view:memory",
 			.subscriptions = BUXN_DBGX_SUB_INFO_PUSH | BUXN_DBGX_SUB_FOCUS,
-			.options = BUXN_DBGX_INIT_OPT_INFO,
+			.options = BUXN_DBGX_INIT_OPT_INFO | BUXN_DBGX_INIT_OPT_CONFIG,
 		},
 		&(buxn_dbgx_init_rep_t){
-			.info = &info
+			.info = &info,
+			.config = &config,
 		}
 	)) {
 		bio_close_mailbox(mailbox);
@@ -351,8 +352,8 @@ bio_main(void* userdata) {
 	}
 
 	buxn_dbg_symtab_t* symtab = NULL;
-	if (args->dbg_filename != NULL) {
-		symtab = buxn_dbg_load_symbols(args->dbg_filename);
+	if (config.dbg_filename != NULL) {
+		symtab = buxn_dbg_load_symbols(config.dbg_filename);
 	}
 	if (symtab == NULL) {
 		BIO_WARN("Semantic highlighting will not be available");
@@ -510,15 +511,6 @@ BUXN_DBG_CMD_EX(view_memory, "view:memory", "Show a hex dump of memory") {
 			.parser = barg_transport(&args.connect_transport),
 			.summary = "How to connect to the debug server",
 			.description = CONNECT_TRANSPORT_OPT_DESC,
-		},
-		{
-			.name = "dbg-file",
-			.short_name = 'd',
-			.value_name = "path",
-			.parser = barg_str(&args.dbg_filename),
-			.summary = "Path to the .rom.dbg file",
-			.description =
-				"If not specified, bytes will not be semantically highlighted.",
 		},
 		barg_opt_hidden_help(),
 	};

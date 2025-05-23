@@ -1,3 +1,8 @@
+#ifdef __linux__
+#define _GNU_SOURCE
+#include <stdlib.h>
+#endif
+
 #include "server.h"
 #include "client.h"
 #include "vm.h"
@@ -52,6 +57,7 @@ struct buxn_dbg_vm_controller_s {
 typedef struct {
 	server_mailbox_t server_mailbox;
 	buxn_dbg_vm_handler_t vm;
+	buxn_dbgx_config_t config;
 	buxn_dbg_vm_controller_t* vm_controller;
 } client_shared_ctx_t;
 
@@ -119,6 +125,19 @@ int
 buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 	bio_set_coro_name("server");
 	buxn_dbg_server_args_t* args = userdata;
+
+	buxn_dbgx_config_t config = args->config;
+
+#ifdef __linux__
+	// Use absolute path so that clients can open files from any dir
+	if (config.dbg_filename != NULL) {
+		config.dbg_filename = realpath(config.dbg_filename, NULL);
+	}
+
+	if (config.src_dir != NULL) {
+		config.src_dir = realpath(config.src_dir, NULL);
+	}
+#endif
 
 	// Connect to VM
 	bio_error_t error = { 0 };
@@ -222,6 +241,7 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 
 	client_shared_ctx_t client_shared_ctx = {
 		.server_mailbox = mailbox,
+		.config = config,
 	};
 	buxn_dbg_client_controller_t* clients = buxn_dbg_malloc(sizeof(buxn_dbg_client_controller_t) * MAX_CLIENTS);
 	for (int i = 0; i < MAX_CLIENTS; ++i) {
@@ -396,6 +416,11 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 	buxn_dbg_free(bserial_mem_out);
 	buxn_dbg_free(bserial_mem_in);
 
+#ifdef __linux__
+	free((char*)config.dbg_filename);
+	free((char*)config.src_dir);
+#endif
+
 	return 0;
 }
 
@@ -469,6 +494,10 @@ buxn_dbg_client_request(buxn_dbg_client_controller_t* controller, buxn_dbgx_msg_
 
 			if (msg.init.options & BUXN_DBGX_INIT_OPT_INFO) {
 				rep.init_rep.info = &controller->shared_ctx->vm_controller->info;
+			}
+
+			if (msg.init.options & BUXN_DBGX_INIT_OPT_CONFIG) {
+				rep.init_rep.config = &controller->shared_ctx->config;
 			}
 
 			controller->subscriptions = msg.init.subscriptions;

@@ -86,16 +86,16 @@ buxn_dbgx_protocol_msg_body(
 					}
 				}
 
-				BSERIAL_KEY(ctx, support_files) {
-					bool present = msg->init_rep.support_files != NULL;
+				BSERIAL_KEY(ctx, config) {
+					bool present = msg->init_rep.config != NULL;
 					BSERIAL_CHECK_STATUS(bserial_optional(ctx, &present));
 					if (present) {
-						BSERIAL_RECORD(ctx, msg->init_rep.support_files) {
+						BSERIAL_RECORD(ctx, msg->init_rep.config) {
 							BSERIAL_KEY(ctx, dbg_filename) {
 								BSERIAL_CHECK_STATUS(
 									bserial_str(
 										ctx,
-										&msg->init_rep.support_files->dbg_filename,
+										&msg->init_rep.config->dbg_filename,
 										&tmp_buf
 									)
 								);
@@ -104,7 +104,7 @@ buxn_dbgx_protocol_msg_body(
 								BSERIAL_CHECK_STATUS(
 									bserial_str(
 										ctx,
-										&msg->init_rep.support_files->src_dir,
+										&msg->init_rep.config->src_dir,
 										&tmp_buf
 									)
 								);
