@@ -56,14 +56,24 @@ buxn_brkp_toggle(
 		}
 
 		// Breakpoint 0 is reserved for "run to cursor"
-		uint8_t brkp_id = brkp_set->nbrkps == 0 ? 1 : brkp_set->nbrkps;
 		buxn_dbg_brkp_t brkp = { .addr = addr, .mask = mask };
-		buxn_brkp_set_update(brkp_set, brkp_id, brkp);
-		return buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
-			.type = BUXN_DBG_CMD_BRKP_SET,
-			.brkp_set = { .id = brkp_id, .brkp = brkp },
-		});
+		for (uint8_t i = 1; i < 255; ++i) {
+			if (brkp_set->brkps[i].mask == 0) {
+				brkp_id = i;
+				break;
+			}
+		}
+
+		if (brkp_id != BUXN_DBG_BRKP_NONE) {
+			buxn_brkp_set_update(brkp_set, brkp_id, brkp);
+			return buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
+				.type = BUXN_DBG_CMD_BRKP_SET,
+				.brkp_set = { .id = brkp_id, .brkp = brkp },
+			});
+		}
 	}
+
+	return BIO_CALL_CANCELLED;
 }
 
 const buxn_dbg_brkp_t*

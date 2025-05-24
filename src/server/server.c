@@ -634,6 +634,7 @@ buxn_dbg_vm_notify(buxn_dbg_vm_controller_t* controller, buxn_dbg_msg_t msg) {
 			break;
 		case BUXN_DBG_MSG_END_BREAK:
 			controller->info.vm_paused = false;
+			controller->info.brkp_id = BUXN_DBG_BRKP_NONE;
 			break;
 		case BUXN_DBG_MSG_PAUSED:
 			controller->info.vm_paused = true;

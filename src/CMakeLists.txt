@@ -8,6 +8,7 @@ set(SOURCES
 	"cmd_view_source.c"
 	"cmd_view_wst.c"
 	"cmd_view_rst.c"
+	"cmd_view_breakpoints.c"
 	"cmd_view_memory.c"
 	"cmd_dev_log.c"
 	"cmd_dev_logd.c"
