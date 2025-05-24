@@ -161,8 +161,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				if (sym != NULL) {
 					tb_printf(
 						36, i + 1,
-						focused && attribute == 4 ? fg | TB_BLACK | TB_BOLD : fg,
-						focused && attribute == 4 ? bg | TB_WHITE : bg,
+						fg, bg,
 						"%s:%d:%d",
 						sym->region.filename,
 						sym->region.range.start.line,
