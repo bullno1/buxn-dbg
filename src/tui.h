@@ -107,4 +107,8 @@ BIO_FORMAT_ATTRIBUTE(1, 2)
 void
 buxn_tui_status_line(const char* fmt, ...);
 
+BIO_FORMAT_ATTRIBUTE(3, 4)
+void
+buxn_tui_status_line_ex(uintattr_t fg, uintattr_t bg, const char* fmt, ...);
+
 #endif

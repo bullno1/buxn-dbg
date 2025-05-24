@@ -160,3 +160,22 @@ buxn_tui_status_line(const char* fmt, ...) {
 		tb_printf((int)num_chars, height - 1, TB_BLACK, TB_WHITE, "%*s", width - num_chars, "");
 	}
 }
+
+void
+buxn_tui_status_line_ex(uintattr_t fg, uintattr_t bg, const char* fmt, ...) {
+    char buf[1024];
+	va_list args;
+	va_start(args, fmt);
+    int rv = vsnprintf(buf, sizeof(buf), fmt, args);
+	va_end(args);
+    if (rv < 0 || rv >= (int)sizeof(buf)) {
+		return;
+	}
+	int width = tb_width();
+	int height = tb_height();
+	size_t num_chars;
+	tb_print_ex(0, height - 1, fg, bg, &num_chars, buf);
+	if ((int)num_chars < width) {
+		tb_printf((int)num_chars, height - 1, fg, bg, "%*s", width - num_chars, "");
+	}
+}

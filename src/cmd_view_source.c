@@ -60,6 +60,7 @@ typedef struct {
 	buxn_brkp_set_t brkps;
 	uint16_t focus_address;
 	uint16_t pc;
+	bool vm_paused;
 } tui_ctx_t;
 
 static void
@@ -248,7 +249,9 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 		if (focused_symbol != NULL) {
 			const buxn_asm_source_region_t* region = &focused_symbol->region;
-			buxn_tui_status_line(
+			buxn_tui_status_line_ex(
+				TB_BLACK,
+				ctx->vm_paused ? TB_WHITE : TB_RED,
 				"%s (%d:%d:%d - %d:%d:%d)",
 				region->filename,
 				region->range.start.line, region->range.start.col, region->range.start.byte,
@@ -554,6 +557,7 @@ bio_main(void* userdata) {
 		.source_set = &source_set,
 		.focus_address = info.focus,
 		.pc = info.pc,
+		.vm_paused = info.vm_paused,
 	};
 
 	buxn_brkp_set_load(&ui_ctx.brkps, client);
@@ -653,6 +657,7 @@ bio_main(void* userdata) {
 			case MSG_INFO_PUSH:
 				ui_ctx.focus_address = msg.info_push.focus;
 				ui_ctx.pc = msg.info_push.pc;
+				ui_ctx.vm_paused = msg.info_push.vm_paused;
 				buxn_tui_refresh(tui);
 				break;
 			case MSG_BRKP_PUSH:

@@ -518,6 +518,17 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 						BUXN_DBGX_SUB_INFO_PUSH,
 						-1
 					);
+				} else if (vm_msg.type == BUXN_DBG_MSG_END_BREAK) {
+					buxn_dbgx_msg_t info_push = {
+						.type = BUXN_DBGX_MSG_INFO_PUSH,
+						.info_push = vm_controller.info,
+					};
+					broadcast_to_clients(
+						clients,
+						info_push,
+						BUXN_DBGX_SUB_INFO_PUSH,
+						-1
+					);
 				}
 
 				buxn_dbgx_msg_t notification = {

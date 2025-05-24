@@ -68,6 +68,7 @@ typedef struct {
 	buxn_brkp_set_t brkps;
 	int focus_address;
 	int pc;
+	bool vm_paused;
 } tui_ctx_t;
 
 static bio_call_status_t
@@ -123,7 +124,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 		// If the desired address range is not yet loaded, request a refresh
 		int loading_start_addr = (int)ctx->view_buffer.loading_start_address;
 		int loading_end_addr = (int)ctx->view_buffer.loading_end_address;
-		if (!(
+		if (ctx->vm_paused && !(
 			loading_start_addr <= start_address
 			&& start_address < loading_end_addr
 			&& loading_start_addr <= end_address
@@ -246,7 +247,9 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 			// Print source location
 			const buxn_asm_source_region_t* region = &focused_symbol->region;
-			buxn_tui_status_line(
+			buxn_tui_status_line_ex(
+				TB_BLACK,
+				ctx->vm_paused ? TB_WHITE : TB_RED,
 				"[0x%04x] %s (%d:%d:%d - %d:%d:%d)",
 				ctx->focus_address,
 				region->filename,
@@ -263,7 +266,12 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 					"Opcode: %s", opcode_names[focused_byte]
 				);
 			}
-			buxn_tui_status_line("[0x%04x]", ctx->focus_address);
+			buxn_tui_status_line_ex(
+				TB_BLACK,
+				ctx->vm_paused ? TB_WHITE : TB_RED,
+				"[0x%04x]",
+				ctx->focus_address
+			);
 		}
 
 		bio_tb_present();
@@ -398,6 +406,7 @@ bio_main(void* userdata) {
 		.client = client,
 		.focus_address = info.focus,
 		.pc = info.pc,
+		.vm_paused = info.vm_paused,
 	};
 	buxn_brkp_set_load(&ui_ctx.brkps, client);
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
@@ -508,13 +517,16 @@ bio_main(void* userdata) {
 			case MSG_INFO_PUSH: {
 				ui_ctx.focus_address = msg.info_push.focus;
 				ui_ctx.pc = msg.info_push.pc;
+				ui_ctx.vm_paused = msg.info_push.vm_paused;
 				// Refresh view since a memory store might have happened
-				vm_mem_read(
-					client,
-					ui_ctx.view_buffer.loaded_start_address,
-					ui_ctx.view_buffer.loaded_end_address - ui_ctx.view_buffer.loaded_start_address,
-					ui_ctx.view_buffer.buffer
-				);
+				if (msg.info_push.vm_paused) {
+					vm_mem_read(
+						client,
+						ui_ctx.view_buffer.loaded_start_address,
+						ui_ctx.view_buffer.loaded_end_address - ui_ctx.view_buffer.loaded_start_address,
+						ui_ctx.view_buffer.buffer
+					);
+				}
 				buxn_tui_refresh(tui);
 			} break;
 			case MSG_BRKP_PUSH: {
