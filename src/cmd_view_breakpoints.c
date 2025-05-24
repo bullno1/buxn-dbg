@@ -172,6 +172,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			}
 		}
 
+		buxn_tui_status_line("breakpoints");
 		bio_tb_present();
 
 		uint8_t old_focus = ctx->focus;
