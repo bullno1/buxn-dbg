@@ -170,6 +170,18 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				case BUXN_TUI_MOVE_TO_LINE_END:
 					attribute = 4;
 					break;
+				case BUXN_TUI_TOGGLE_BREAKPOINT: {
+					buxn_dbg_brkp_t* brkp = &ctx->brkps.brkps[ctx->focus];
+					if (attribute == 0) { brkp->mask ^= BUXN_DBG_BRKP_LOAD; }
+					if (attribute == 1) { brkp->mask ^= BUXN_DBG_BRKP_STORE; }
+					if (attribute == 2) { brkp->mask ^= BUXN_DBG_BRKP_EXEC; }
+					if (attribute == 3) { brkp->mask ^= BUXN_DBG_BRKP_PAUSE; }
+					if (attribute == 4) { brkp->mask ^= BUXN_DBG_BRKP_DEV; }
+					buxn_dbg_client_send_dbg_cmd(ctx->client, (buxn_dbg_cmd_t){
+						.type = BUXN_DBG_CMD_BRKP_SET,
+						.brkp_set = { .id = ctx->focus, .brkp = *brkp },
+					});
+				} break;
 				case BUXN_TUI_STEP:
 					buxn_tui_execute_step(&msg, ctx->client);
 					break;
