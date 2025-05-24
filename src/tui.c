@@ -100,6 +100,10 @@ buxn_tui_handle_event(const struct tb_event* event) {
 			return BUXN_TUI_STEP;
 		} else if (event->ch == 'r') {
 			return BUXN_TUI_STEP;
+		} else if (event->ch == 'c') {
+			return BUXN_TUI_STEP;
+		} else if (event->ch == 'b') {
+			return BUXN_TUI_TOGGLE_BREAKPOINT;
 		} else {
 			return BUXN_TUI_UNKNOWN;
 		}
@@ -122,6 +126,9 @@ buxn_tui_execute_step(const struct tb_event* event, buxn_dbg_client_t client) {
 			do_step = true;
 		} else if (event->ch == 'r') {  // (r)eturn (step out)
 			step = BUXN_DBG_CMD_STEP_OUT;
+			do_step = true;
+		} else if (event->ch == 'c') {  // (c)continue
+			step = BUXN_DBG_CMD_RESUME;
 			do_step = true;
 		}
 	}

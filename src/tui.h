@@ -81,6 +81,7 @@ typedef enum {
 	BUXN_TUI_MOVE_TO_LINE_START,
 	BUXN_TUI_MOVE_TO_LINE_END,
 	BUXN_TUI_STEP,
+	BUXN_TUI_TOGGLE_BREAKPOINT,
 } buxn_tui_event_type_t;
 
 buxn_tui_t
@@ -95,10 +96,13 @@ buxn_tui_refresh(buxn_tui_t ui);
 buxn_tui_event_type_t
 buxn_tui_handle_event(const struct tb_event* event);
 
+// Common UI actions
+
 bio_call_status_t
 buxn_tui_execute_step(const struct tb_event* event, buxn_dbg_client_t client);
 
 // Common UI elements
+
 BIO_FORMAT_ATTRIBUTE(1, 2)
 void
 buxn_tui_status_line(const char* fmt, ...);

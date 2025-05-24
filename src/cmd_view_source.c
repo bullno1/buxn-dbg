@@ -4,6 +4,7 @@
 #include "logger.h"
 #include "tui.h"
 #include "symbol.h"
+#include "breakpoint.h"
 #include <bio/mailbox.h>
 #include <bio/file.h>
 #include <bhash.h>
@@ -31,6 +32,7 @@ typedef enum {
 	MSG_LOAD_SOURCE,
 	MSG_SET_FOCUS,
 	MSG_INFO_PUSH,
+	MSG_BRKP_PUSH,
 	MSG_QUIT,
 } msg_type_t;
 
@@ -44,6 +46,7 @@ typedef struct {
 
 		buxn_dbgx_set_focus_t set_focus;
 		buxn_dbgx_info_t info_push;
+		buxn_dbgx_brkp_push_t brkp_push;
 	};
 } msg_t;
 
@@ -54,6 +57,7 @@ typedef struct {
 	buxn_dbg_client_t client;
 	const buxn_dbg_symtab_t* symtab;
 	source_set_t* source_set;
+	buxn_brkp_set_t brkps;
 	uint16_t focus_address;
 	uint16_t pc;
 } tui_ctx_t;
@@ -185,6 +189,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 					foreground = TB_BLACK | TB_BOLD;
 				}
 
+				bool is_focused = false;
 				if (
 					focused_symbol != NULL
 					&& (
@@ -196,11 +201,26 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 						)
 					)
 				) {
+					is_focused = true;
 					background = TB_WHITE;
 					if (focused_symbol == pc_symbol) {
 						foreground = TB_CYAN | TB_BOLD;
 					} else {
 						foreground = TB_BLACK | TB_BOLD;
+					}
+				}
+
+				const buxn_dbg_brkp_t* brkp = buxn_brkp_set_find(&ctx->brkps, symbol->addr_min);
+				if (brkp != NULL) {
+					if (
+						symbol->type != BUXN_DBG_SYM_LABEL
+						|| (brkp->mask & BUXN_DBG_BRKP_EXEC) == 0
+					) {
+						background = TB_RED;
+						foreground = TB_BLACK | TB_BOLD;
+						if (is_focused) {
+							foreground |= TB_UNDERLINE;
+						}
 					}
 				}
 
@@ -395,6 +415,16 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				case BUXN_TUI_STEP:
 					buxn_tui_execute_step(&msg, ctx->client);
 					break;
+				case BUXN_TUI_TOGGLE_BREAKPOINT:
+					if (focused_symbol != NULL) {
+						buxn_brkp_toggle(
+							ctx->client, &ctx->brkps,
+							focused_symbol->addr_min,
+							BUXN_DBG_BRKP_MEM | BUXN_DBG_BRKP_PAUSE,
+							focused_symbol
+						);
+					}
+					break;
 				case BUXN_TUI_QUIT:
 					should_run = false;
 					break;
@@ -454,6 +484,12 @@ handle_notification(buxn_dbgx_msg_t msg, void* userdata) {
 			.info_push = msg.info_push,
 		};
 		bio_wait_and_send_message(true, mailbox, msg_to_main);
+	} else if (msg.type == BUXN_DBGX_MSG_BRKP_PUSH) {
+		msg_t msg_to_main = {
+			.type = MSG_BRKP_PUSH,
+			.brkp_push = msg.brkp_push,
+		};
+		bio_wait_and_send_message(true, mailbox, msg_to_main);
 	}
 }
 
@@ -477,7 +513,10 @@ bio_main(void* userdata) {
 		},
 		&(buxn_dbgx_init_t){
 			.client_name = "view:source",
-			.subscriptions = BUXN_DBGX_SUB_INFO_PUSH | BUXN_DBGX_SUB_FOCUS,
+			.subscriptions =
+				  BUXN_DBGX_SUB_INFO_PUSH
+				| BUXN_DBGX_SUB_FOCUS
+				| BUXN_DBGX_SUB_BRKP,
 			.options = BUXN_DBGX_INIT_OPT_INFO | BUXN_DBGX_INIT_OPT_CONFIG,
 		},
 		&(buxn_dbgx_init_rep_t){
@@ -514,6 +553,9 @@ bio_main(void* userdata) {
 		.focus_address = info.focus,
 		.pc = info.pc,
 	};
+
+	buxn_brkp_set_load(&ui_ctx.brkps, client);
+
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
 
 	char path_buf[1024];  // TODO: dynamically allocate
@@ -609,6 +651,10 @@ bio_main(void* userdata) {
 			case MSG_INFO_PUSH:
 				ui_ctx.focus_address = msg.info_push.focus;
 				ui_ctx.pc = msg.info_push.pc;
+				buxn_tui_refresh(tui);
+				break;
+			case MSG_BRKP_PUSH:
+				buxn_brkp_set_update(&ui_ctx.brkps, msg.brkp_push.id, msg.brkp_push.brkp);
 				buxn_tui_refresh(tui);
 				break;
 			case MSG_QUIT:

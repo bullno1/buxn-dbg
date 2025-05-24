@@ -19,6 +19,7 @@ set(SOURCES
 	"bio_termbox2.c"
 	"tui.c"
 	"symbol.c"
+	"breakpoint.c"
 	"libs.c"
 )
 add_executable(buxn-dbg ${SOURCES})

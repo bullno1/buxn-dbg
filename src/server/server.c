@@ -26,6 +26,7 @@ typedef enum {
 	SERVER_MSG_VM_DISCONNECTED,
 	SERVER_MSG_NEW_CLIENT,
 	SERVER_MSG_SET_FOCUS,
+	SERVER_MSG_BROADCAST,
 	SERVER_MSG_TERMINATE_CLIENT,
 	SERVER_MSG_CLIENT_TERMINATED,
 } server_msg_type_t;
@@ -54,6 +55,12 @@ typedef struct {
 		struct {
 			bio_socket_t socket;
 		} new_client;
+
+		struct {
+			buxn_dbgx_msg_t msg;
+			uint32_t mask;
+			int exclude;
+		} broadcast;
 	};
 } server_msg_t;
 
@@ -564,6 +571,14 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 					msg.set_focus.client_id
 				);
 			} break;
+			case SERVER_MSG_BROADCAST: {
+				broadcast_to_clients(
+					clients,
+					msg.broadcast.msg,
+					msg.broadcast.mask,
+					msg.broadcast.exclude
+				);
+			} break;
 			case SERVER_MSG_CLIENT_TERMINATED: {
 				BIO_INFO("Client %d disconnected", msg.client_terminated.id);
 				clients[msg.client_terminated.id].id = -1;
@@ -664,7 +679,7 @@ buxn_dbg_client_request(buxn_dbg_client_controller_t* controller, buxn_dbgx_msg_
 		case BUXN_DBGX_MSG_INIT: {
 			BIO_DEBUG("Initializing");
 			if (controller->initialized) {
-				BIO_WARN("Client %d sends init twice", controller->id);
+				BIO_WARN("Client %d sent init twice", controller->id);
 				terminate_client(controller);
 				return;
 			}
@@ -690,6 +705,29 @@ buxn_dbg_client_request(buxn_dbg_client_controller_t* controller, buxn_dbgx_msg_
 				buxn_dbg_send_vm_cmd(controller->shared_ctx->vm, msg.core.cmd, (bio_signal_t){ 0 });
 				msg.core.type = BUXN_DBG_MSG_COMMAND_REP;
 				buxn_dbg_notify_client_sync(controller->client, msg);
+
+				if (msg.core.cmd.type == BUXN_DBG_CMD_BRKP_SET) {
+					buxn_dbgx_msg_t broadcast_msg = {
+						.type = BUXN_DBGX_MSG_BRKP_PUSH,
+						.brkp_push = {
+							.id = msg.core.cmd.brkp_set.id,
+							.brkp = msg.core.cmd.brkp_set.brkp,
+						},
+					};
+					server_msg_t msg_to_server = {
+						.type = SERVER_MSG_BROADCAST,
+						.broadcast = {
+							.mask = BUXN_DBGX_SUB_BRKP,
+							.exclude = controller->id,
+							.msg = broadcast_msg,
+						},
+					};
+					bio_wait_and_send_message(
+						true,
+						controller->shared_ctx->server_mailbox,
+						msg_to_server
+					);
+				}
 			} else {
 				BIO_WARN("Client %d sends invalid core message", controller->id);
 				terminate_client(controller);
@@ -703,7 +741,11 @@ buxn_dbg_client_request(buxn_dbg_client_controller_t* controller, buxn_dbgx_msg_
 					.address = msg.set_focus.address,
 				},
 			};
-			bio_wait_and_send_message(true, controller->shared_ctx->server_mailbox, msg_to_server);
+			bio_wait_and_send_message(
+				true,
+				controller->shared_ctx->server_mailbox,
+				msg_to_server
+			);
 		} break;
 		default: {
 			BIO_WARN("Client %d sends invalid message", controller->id);

@@ -10,12 +10,14 @@ typedef enum {
 	BUXN_DBGX_MSG_CORE        = 3,
 	BUXN_DBGX_MSG_SET_FOCUS   = 4,
 	BUXN_DBGX_MSG_INFO_PUSH   = 5,
+	BUXN_DBGX_MSG_BRKP_PUSH   = 6,
 } buxn_dbgx_msg_type_t;
 
 #define BUXN_DBGX_SUB_NONE        (0)
 #define BUXN_DBGX_SUB_INFO_PUSH   (1 << 0)
 #define BUXN_DBGX_SUB_FOCUS       (1 << 1)
 #define BUXN_DBGX_SUB_VM_STATE    (1 << 2)
+#define BUXN_DBGX_SUB_BRKP        (1 << 3)
 
 #define BUXN_DBGX_INIT_OPT_NONE        (0)
 #define BUXN_DBGX_INIT_OPT_INFO        (1 << 0)
@@ -51,6 +53,11 @@ typedef struct {
 } buxn_dbgx_set_focus_t;
 
 typedef struct {
+	uint8_t id;
+	buxn_dbg_brkp_t brkp;
+} buxn_dbgx_brkp_push_t;
+
+typedef struct {
 	buxn_dbgx_msg_type_t type;
 	union {
 		buxn_dbgx_init_t init;
@@ -58,6 +65,7 @@ typedef struct {
 		buxn_dbg_msg_t core;
 		buxn_dbgx_info_t info_push;
 		buxn_dbgx_set_focus_t set_focus;
+		buxn_dbgx_brkp_push_t brkp_push;
 	};
 } buxn_dbgx_msg_t;
 
