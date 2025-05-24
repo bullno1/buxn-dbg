@@ -30,7 +30,7 @@ typedef struct {
 static void
 handle_notification(buxn_dbgx_msg_t msg, void* userdata) {
 	mailbox_t mailbox = *(mailbox_t*)userdata;
-	if (msg.type == BUXN_DBGX_MSG_INFO_PUSH) {
+	if (msg.type == BUXN_DBGX_MSG_INFO_PUSH && msg.info_push.vm_paused) {
 		msg_t msg_to_main = {
 			.type = MSG_INFO_PUSH,
 		};

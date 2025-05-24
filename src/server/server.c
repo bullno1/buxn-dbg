@@ -519,6 +519,8 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 						-1
 					);
 				} else if (vm_msg.type == BUXN_DBG_MSG_END_BREAK) {
+					// TODO: This will cause vm state sync problem if it is only
+					// a trace point
 					buxn_dbgx_msg_t info_push = {
 						.type = BUXN_DBGX_MSG_INFO_PUSH,
 						.info_push = vm_controller.info,

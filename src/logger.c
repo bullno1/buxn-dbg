@@ -92,6 +92,7 @@ buxn_dbg_logger_entry(void* userdata) {
 	{
 		_Alignas(max_align_t) char tmp_buf[1024];
 		size_t size = bserial_ctx_mem_size(buxn_log_bserial_config);
+		(void)size;
 		assert(size <= sizeof(tmp_buf));
 		buxn_dbg_logger_msg_t name_msg = { 0 };
 		bserial_msg_out_t msg_out = {

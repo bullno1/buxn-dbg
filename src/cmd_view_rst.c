@@ -324,13 +324,15 @@ bio_main(void* userdata) {
 				break;
 			case MSG_INFO_PUSH:
 				ui_ctx.vm_info = msg.info_push;
-				buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
-					.type = BUXN_DBG_CMD_INFO,
-					.info = {
-						.type = BUXN_DBG_INFO_RST,
-						.stack = &ui_ctx.stack,
-					},
-				});
+				if (msg.info_push.vm_paused) {
+					buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
+						.type = BUXN_DBG_CMD_INFO,
+						.info = {
+							.type = BUXN_DBG_INFO_RST,
+							.stack = &ui_ctx.stack,
+						},
+					});
+				}
 				buxn_tui_refresh(tui);
 				break;
 			case MSG_QUIT:
