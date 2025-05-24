@@ -4,6 +4,7 @@
 #include "logger.h"
 #include "tui.h"
 #include "breakpoint.h"
+#include "symbol.h"
 #include <bio/mailbox.h>
 
 typedef struct {
@@ -34,6 +35,7 @@ typedef struct {
 	buxn_brkp_set_t brkps;
 	mailbox_t main_mailbox;
 	buxn_dbg_client_t client;
+	buxn_dbg_symtab_t* symtab;
 } tui_ctx_t;
 
 static void
@@ -79,6 +81,15 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			TB_DEFAULT, TB_DEFAULT,
 			"─────┼──────┼─────┼───────┼───────┤"
 		);
+
+		if (ctx->symtab != NULL) {
+			int width = tb_width();
+			tb_printf(36, 0, TB_DEFAULT, TB_DEFAULT, "source");
+			tb_printf(34, 1, TB_DEFAULT, TB_DEFAULT, "┼");
+			for (int i = 0; i < width - 35; ++i) {
+				tb_printf(i + 35, 1, TB_DEFAULT, TB_DEFAULT, "─");
+			}
+		}
 
 		for (uint8_t i = 1; i < ctx->brkps.nbrkps; ++i) {
 			const buxn_dbg_brkp_t* brkp = &ctx->brkps.brkps[i];
@@ -142,6 +153,23 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				focused && attribute == 4 ? bg | TB_WHITE : bg,
 				"%s", where == BUXN_DBG_BRKP_MEM ? "mem" : "dev"
 			);
+
+			// source
+			if (ctx->symtab != NULL) {
+				const buxn_dbg_sym_t* sym = buxn_dbg_find_symbol(ctx->symtab, brkp->addr, NULL);
+
+				if (sym != NULL) {
+					tb_printf(
+						36, i + 1,
+						focused && attribute == 4 ? fg | TB_BLACK | TB_BOLD : fg,
+						focused && attribute == 4 ? bg | TB_WHITE : bg,
+						"%s:%d:%d",
+						sym->region.filename,
+						sym->region.range.start.line,
+						sym->region.range.start.col
+					);
+				}
+			}
 		}
 
 		bio_tb_present();
@@ -231,6 +259,8 @@ bio_main(void* userdata) {
 	bio_open_mailbox(&mailbox, 8);
 
 	buxn_dbgx_info_t info = { 0 };
+	buxn_dbgx_config_t config = { 0 };
+
 	buxn_dbg_client_t client;
 	if (!buxn_dbg_make_client_ex(
 		&client,
@@ -245,10 +275,11 @@ bio_main(void* userdata) {
 				  BUXN_DBGX_SUB_INFO_PUSH
 				| BUXN_DBGX_SUB_FOCUS
 				| BUXN_DBGX_SUB_BRKP,
-			.options = BUXN_DBGX_INIT_OPT_INFO,
+			.options = BUXN_DBGX_INIT_OPT_INFO | BUXN_DBGX_INIT_OPT_CONFIG,
 		},
 		&(buxn_dbgx_init_rep_t){
 			.info = &info,
+			.config = &config,
 		}
 	)) {
 		bio_close_mailbox(mailbox);
@@ -264,6 +295,9 @@ bio_main(void* userdata) {
 		.client = client,
 	};
 	buxn_brkp_set_load(&ui_ctx.brkps, client);
+	if (config.dbg_filename != NULL) {
+		ui_ctx.symtab = buxn_dbg_load_symbols(config.dbg_filename);
+	}
 
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
 
@@ -291,6 +325,7 @@ bio_main(void* userdata) {
 end:
 
 	buxn_tui_stop(tui);
+	buxn_dbg_unload_symbols(ui_ctx.symtab);
 	bio_close_mailbox(mailbox);
 	buxn_dbg_stop_client(client);
 	return 0;
