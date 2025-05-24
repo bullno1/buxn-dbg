@@ -33,6 +33,7 @@ typedef struct {
 	buxn_dbgx_info_t info;
 	buxn_brkp_set_t brkps;
 	mailbox_t main_mailbox;
+	buxn_dbg_client_t client;
 } tui_ctx_t;
 
 static void
@@ -67,7 +68,6 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 	int attribute = 0;
 	while (bio_is_mailbox_open(mailbox) && should_run) {
 		tb_clear();
-		BIO_TRACE("focus == %d", ctx->focus);
 
 		tb_printf(
 			0, 0,
@@ -146,6 +146,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 
 		bio_tb_present();
 
+		uint8_t old_focus = ctx->focus;
 		buxn_tui_loop(msg, mailbox) {
 			switch (buxn_tui_handle_event(&msg)) {
 				case BUXN_TUI_QUIT:
@@ -169,8 +170,18 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				case BUXN_TUI_MOVE_TO_LINE_END:
 					attribute = 4;
 					break;
+				case BUXN_TUI_STEP:
+					buxn_tui_execute_step(&msg, ctx->client);
+					break;
 				default:
 					break;
+			}
+		}
+
+		if (ctx->focus != old_focus) {
+			const buxn_dbg_brkp_t* brkp = &ctx->brkps.brkps[ctx->focus];
+			if (brkp->mask != 0) {
+				buxn_dbg_client_set_focus(ctx->client, brkp->addr);
 			}
 		}
 	}
@@ -238,6 +249,7 @@ bio_main(void* userdata) {
 		.main_mailbox = mailbox,
 		.info = info,
 		.focus = 1,
+		.client = client,
 	};
 	buxn_brkp_set_load(&ui_ctx.brkps, client);
 
