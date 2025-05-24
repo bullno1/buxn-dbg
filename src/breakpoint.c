@@ -24,8 +24,14 @@ buxn_brkp_toggle(
 	const buxn_dbg_sym_t* sym
 ) {
 	uint8_t brkp_id = BUXN_DBG_BRKP_NONE;
+	uint8_t brkp_type = mask & BUXN_DBG_BRKP_TYPE_MASK;
 	for (uint8_t i = 0; i < brkp_set->nbrkps; ++i) {
-		if (brkp_set->brkps[i].addr == addr) {
+		const buxn_dbg_brkp_t* brkp = &brkp_set->brkps[i];
+		if (
+			brkp->mask != 0
+			&& brkp->addr == addr
+			&& (brkp->mask & BUXN_DBG_BRKP_TYPE_MASK) == brkp_type
+		) {
 			brkp_id = i;
 			break;
 		}
@@ -61,10 +67,15 @@ buxn_brkp_toggle(
 }
 
 const buxn_dbg_brkp_t*
-buxn_brkp_set_find(const buxn_brkp_set_t* brkp_set, uint16_t addr) {
+buxn_brkp_set_find(const buxn_brkp_set_t* brkp_set, uint16_t addr, uint8_t mem_or_device) {
 	for (uint8_t i = 0; i < brkp_set->nbrkps; ++i) {
-		if (brkp_set->brkps[i].addr == addr) {
-			return &brkp_set->brkps[i];
+		const buxn_dbg_brkp_t* brkp = &brkp_set->brkps[i];
+		if (
+			brkp->mask != 0
+			&& brkp->addr == addr
+			&& (brkp->mask & BUXN_DBG_BRKP_TYPE_MASK) == mem_or_device
+		) {
+			return brkp;
 		}
 	}
 

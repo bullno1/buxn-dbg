@@ -14,7 +14,7 @@ void
 buxn_brkp_set_update(buxn_brkp_set_t* brkp_set, uint8_t id, buxn_dbg_brkp_t brkp);
 
 const buxn_dbg_brkp_t*
-buxn_brkp_set_find(const buxn_brkp_set_t* brkp_set, uint16_t addr);
+buxn_brkp_set_find(const buxn_brkp_set_t* brkp_set, uint16_t addr, uint8_t mem_or_device);
 
 bio_call_status_t
 buxn_brkp_toggle(

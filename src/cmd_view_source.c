@@ -210,7 +210,9 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 					}
 				}
 
-				const buxn_dbg_brkp_t* brkp = buxn_brkp_set_find(&ctx->brkps, symbol->addr_min);
+				const buxn_dbg_brkp_t* brkp = buxn_brkp_set_find(
+					&ctx->brkps, symbol->addr_min, BUXN_DBG_BRKP_MEM
+				);
 				if (brkp != NULL) {
 					if (
 						symbol->type != BUXN_DBG_SYM_LABEL

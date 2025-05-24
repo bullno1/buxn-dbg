@@ -4,6 +4,7 @@
 #include "logger.h"
 #include "tui.h"
 #include "symbol.h"
+#include "breakpoint.h"
 #include <buxn/vm/opcodes.h>
 #include <bio/mailbox.h>
 
@@ -38,6 +39,7 @@ typedef enum {
 	MSG_REQUEST_REFRESH,
 	MSG_SET_FOCUS,
 	MSG_INFO_PUSH,
+	MSG_BRKP_PUSH,
 	MSG_QUIT,
 } msg_type_t;
 
@@ -52,6 +54,7 @@ typedef struct {
 
 		buxn_dbgx_set_focus_t set_focus;
 		buxn_dbgx_info_t info_push;
+		buxn_dbgx_brkp_push_t brkp_push;
 	};
 } msg_t;
 
@@ -62,6 +65,7 @@ typedef struct {
 	const buxn_dbg_symtab_t* symtab;
 	buxn_dbg_client_t client;
 	view_buffer_t view_buffer;
+	buxn_brkp_set_t brkps;
 	int focus_address;
 	int pc;
 } tui_ctx_t;
@@ -188,6 +192,17 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				}
 			}
 
+			const buxn_dbg_brkp_t* brkp = buxn_brkp_set_find(
+				&ctx->brkps, address, BUXN_DBG_BRKP_MEM
+			);
+			if (brkp != NULL) {
+				background = TB_RED;
+				foreground = TB_BLACK | TB_BOLD;
+				if (address == ctx->focus_address) {
+					foreground |= TB_UNDERLINE;
+				}
+			}
+
 			if (loaded_start_addr <= address && address < loaded_end_addr) {
 				uint8_t byte = ctx->view_buffer.buffer[address - loaded_start_addr];
 				if (address == ctx->focus_address) {
@@ -288,6 +303,14 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 				case BUXN_TUI_STEP:
 					buxn_tui_execute_step(&msg, ctx->client);
 					break;
+				case BUXN_TUI_TOGGLE_BREAKPOINT:
+					buxn_brkp_toggle(
+						ctx->client, &ctx->brkps,
+						ctx->focus_address,
+						BUXN_DBG_BRKP_MEM | BUXN_DBG_BRKP_PAUSE,
+						focused_symbol
+					);
+					break;
 				default:
 					break;
 			}
@@ -316,6 +339,12 @@ handle_notification(buxn_dbgx_msg_t msg, void* userdata) {
 			.info_push = msg.info_push,
 		};
 		bio_wait_and_send_message(true, mailbox, msg_to_main);
+	} else if (msg.type == BUXN_DBGX_MSG_BRKP_PUSH) {
+		msg_t msg_to_main = {
+			.type = MSG_BRKP_PUSH,
+			.brkp_push = msg.brkp_push,
+		};
+		bio_wait_and_send_message(true, mailbox, msg_to_main);
 	}
 }
 
@@ -338,7 +367,10 @@ bio_main(void* userdata) {
 		},
 		&(buxn_dbgx_init_t){
 			.client_name = "view:memory",
-			.subscriptions = BUXN_DBGX_SUB_INFO_PUSH | BUXN_DBGX_SUB_FOCUS,
+			.subscriptions =
+				  BUXN_DBGX_SUB_INFO_PUSH
+				| BUXN_DBGX_SUB_FOCUS
+				| BUXN_DBGX_SUB_BRKP,
 			.options = BUXN_DBGX_INIT_OPT_INFO | BUXN_DBGX_INIT_OPT_CONFIG,
 		},
 		&(buxn_dbgx_init_rep_t){
@@ -367,6 +399,7 @@ bio_main(void* userdata) {
 		.focus_address = info.focus,
 		.pc = info.pc,
 	};
+	buxn_brkp_set_load(&ui_ctx.brkps, client);
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
 
 	uint8_t* load_buffer = NULL;
@@ -482,6 +515,10 @@ bio_main(void* userdata) {
 					ui_ctx.view_buffer.loaded_end_address - ui_ctx.view_buffer.loaded_start_address,
 					ui_ctx.view_buffer.buffer
 				);
+				buxn_tui_refresh(tui);
+			} break;
+			case MSG_BRKP_PUSH: {
+				buxn_brkp_set_update(&ui_ctx.brkps, msg.brkp_push.id, msg.brkp_push.brkp);
 				buxn_tui_refresh(tui);
 			} break;
 			case MSG_QUIT:
