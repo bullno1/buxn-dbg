@@ -82,6 +82,7 @@ typedef enum {
 	BUXN_TUI_MOVE_TO_LINE_END,
 	BUXN_TUI_STEP,
 	BUXN_TUI_TOGGLE_BREAKPOINT,
+	BUXN_TUI_FOLLOW_REFERENCE,
 } buxn_tui_event_type_t;
 
 buxn_tui_t

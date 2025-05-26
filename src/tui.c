@@ -104,6 +104,8 @@ buxn_tui_handle_event(const struct tb_event* event) {
 			return BUXN_TUI_STEP;
 		} else if (event->ch == 'b') {
 			return BUXN_TUI_TOGGLE_BREAKPOINT;
+		} else if (event->key == TB_KEY_ENTER) {
+			return BUXN_TUI_FOLLOW_REFERENCE;
 		} else {
 			return BUXN_TUI_UNKNOWN;
 		}

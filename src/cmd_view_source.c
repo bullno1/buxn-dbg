@@ -430,6 +430,37 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 						);
 					}
 					break;
+				case BUXN_TUI_FOLLOW_REFERENCE: {
+					const buxn_dbg_sym_t* ref_sym = NULL;
+					if (focused_symbol != NULL) {
+						if (focused_symbol->type == BUXN_DBG_SYM_LABEL_REF) {
+							ref_sym = focused_symbol;
+						} else if (
+							focused_symbol->type == BUXN_DBG_SYM_OPCODE
+						) {
+							const buxn_dbg_sym_t* next_sym = focused_symbol + 1;
+							if (
+								next_sym < ctx->symtab->symbols + ctx->symtab->num_symbols
+								&& next_sym->type == BUXN_DBG_SYM_LABEL_REF
+							) {
+								ref_sym = next_sym;
+							}
+						}
+					}
+
+					if (ref_sym) {
+						for (int i = 0; i < ctx->symtab->num_symbols; ++i) {
+							const buxn_dbg_sym_t* sym = &ctx->symtab->symbols[i];
+							if (
+								sym->type == BUXN_DBG_SYM_LABEL
+								&& sym->id == ref_sym->id
+							) {
+								focused_symbol = sym;
+								break;
+							}
+						}
+					}
+				} break;
 				case BUXN_TUI_QUIT:
 					should_run = false;
 					break;
