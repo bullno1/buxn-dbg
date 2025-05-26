@@ -633,6 +633,7 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 
 void
 buxn_dbg_vm_notify(buxn_dbg_vm_controller_t* controller, buxn_dbg_msg_t msg) {
+	bool previous_pause_state = controller->info.vm_paused;
 	switch (msg.type) {
 		case BUXN_DBG_MSG_BEGIN_EXEC:
 			controller->info.vm_executing = true;
@@ -657,11 +658,13 @@ buxn_dbg_vm_notify(buxn_dbg_vm_controller_t* controller, buxn_dbg_msg_t msg) {
 			break;
 	}
 
-	server_msg_t msg_to_server = {
-		.type = SERVER_MSG_VM_NOTIFICATION,
-		.vm_notification.msg = msg,
-	};
-	bio_wait_and_send_message(true, controller->server_mailbox, msg_to_server);
+	if (previous_pause_state != controller->info.vm_paused) {
+		server_msg_t msg_to_server = {
+			.type = SERVER_MSG_VM_NOTIFICATION,
+			.vm_notification.msg = msg,
+		};
+		bio_wait_and_send_message(true, controller->server_mailbox, msg_to_server);
+	}
 }
 
 void
