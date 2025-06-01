@@ -15,6 +15,9 @@ target_link_libraries(buxn-dbg-core PUBLIC buxn)
 add_library(buxn-dbg-protocol STATIC "buxn/src/dbg/protocol.c")
 target_link_libraries(buxn-dbg-protocol PUBLIC buxn blibs)
 
+add_library(buxn-dbg-symtab STATIC "buxn/src/dbg/symtab.c")
+target_link_libraries(buxn-dbg-symtab PUBLIC buxn blibs)
+
 add_library(buxn-dbg-transport-stream STATIC "buxn/src/dbg/transports/stream.c")
 target_link_libraries(buxn-dbg-transport-stream PUBLIC buxn)
 

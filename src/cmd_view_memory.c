@@ -338,7 +338,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 					}
 
 					if (ref_sym) {
-						for (int i = 0; i < ctx->symtab->num_symbols; ++i) {
+						for (uint32_t i = 0; i < ctx->symtab->num_symbols; ++i) {
 							const buxn_dbg_sym_t* sym = &ctx->symtab->symbols[i];
 							if (
 								sym->type == BUXN_DBG_SYM_LABEL

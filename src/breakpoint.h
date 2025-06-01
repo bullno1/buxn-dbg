@@ -2,7 +2,7 @@
 #define BUXN_DBG_BREAKPOINT_H
 
 #include <buxn/dbg/core.h>
-#include <buxn/dbg/symbol.h>
+#include <buxn/dbg/symtab.h>
 #include "client.h"
 
 typedef struct {

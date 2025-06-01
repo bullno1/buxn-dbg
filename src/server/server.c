@@ -336,7 +336,7 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 		if (symtab != NULL) {
 			// Pick the first source file
 			const char* src_file = NULL;
-			for (int i = 0; i < symtab->num_symbols; ++i) {
+			for (uint32_t i = 0; i < symtab->num_symbols; ++i) {
 				if (symtab->symbols[i].region.filename != NULL) {
 					src_file = symtab->symbols[i].region.filename;
 				}

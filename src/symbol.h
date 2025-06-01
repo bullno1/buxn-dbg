@@ -1,13 +1,7 @@
 #ifndef BUXN_DBG_TUI_SYMBOL_H
 #define BUXN_DBG_TUI_SYMBOL_H
 
-#include <buxn/dbg/symbol.h>
-
-typedef struct {
-	void* bserial_mem;
-	int num_symbols;
-	buxn_dbg_sym_t symbols[];
-} buxn_dbg_symtab_t;
+#include <buxn/dbg/symtab.h>
 
 buxn_dbg_symtab_t*
 buxn_dbg_load_symbols(const char* path);

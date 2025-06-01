@@ -13,47 +13,38 @@ buxn_dbg_load_symbols(const char* path) {
 	}
 
 	buxn_dbg_symtab_t* symtab = NULL;
-	bserial_ctx_config_t config = buxn_dbg_sym_recommended_bserial_config();
-	void* bserial_mem = buxn_dbg_malloc(bserial_ctx_mem_size(config));
+
 	bserial_file_io_t io;
 	bserial_file_io_init(&io, dbg_file);
-	bserial_ctx_t* bserial = bserial_make_ctx(bserial_mem, config, &io.in, NULL);
-	uint16_t num_symbols = 0;
-	if (buxn_dbg_sym_table(bserial, &num_symbols) != BSERIAL_OK) {
+	buxn_dbg_symtab_reader_opts_t reader_opts = { .input = &io.in };
+	buxn_dbg_symtab_reader_t* reader = buxn_dbg_make_symtab_reader(
+		buxn_dbg_malloc(buxn_dbg_symtab_reader_mem_size(&reader_opts)),
+		&reader_opts
+	);
+
+	buxn_dbg_symtab_io_status_t status = buxn_dbg_read_symtab_header(reader);
+	if (status != BUXN_DBG_SYMTAB_OK) {
 		BIO_ERROR("Error while loading symbols");
 		goto end;
 	}
 
-	symtab = buxn_dbg_malloc(
-		sizeof(buxn_dbg_symtab_t) +
-		sizeof(buxn_dbg_sym_t) * num_symbols
-	);
-	symtab->num_symbols = (int)num_symbols;
-	for (uint16_t i = 0; i < num_symbols; ++i) {
-		if (buxn_dbg_sym(bserial, &symtab->symbols[i]) != BSERIAL_OK) {
-			BIO_ERROR("Error while loading symbols");
-			buxn_dbg_free(symtab);
-			symtab = NULL;
-			goto end;
-		}
-	}
-
-	symtab->bserial_mem = bserial_mem;
+	symtab = buxn_dbg_malloc(buxn_dbg_symtab_mem_size(reader));
+	status = buxn_dbg_read_symtab(reader, symtab);
 end:
-	if (symtab == NULL) {
-		buxn_dbg_free(bserial_mem);
+	if (status != BUXN_DBG_SYMTAB_OK) {
+		buxn_dbg_free(symtab);
+		symtab = NULL;
 	}
 
+	buxn_dbg_free(reader);
 	bio_fclose(dbg_file, NULL);
+
 	return symtab;
 }
 
 void
 buxn_dbg_unload_symbols(buxn_dbg_symtab_t* symtab) {
-	if (symtab != NULL) {
-		buxn_dbg_free(symtab->bserial_mem);
-		buxn_dbg_free(symtab);
-	}
+	buxn_dbg_free(symtab);
 }
 
 const buxn_dbg_sym_t*
@@ -67,7 +58,7 @@ buxn_dbg_find_symbol(
 
 	// One location can map to multiple labels.
 	// First, only consider non-labels
-	int index = *index_hint;
+	uint32_t index = (uint32_t)*index_hint;
 	const buxn_dbg_sym_t* symbol = NULL;
 	for (; index < symtab->num_symbols; ++index) {
 		if (symtab->symbols[index].type == BUXN_DBG_SYM_LABEL) { continue; }

@@ -295,7 +295,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 						// * Has a start byte after the focused address
 						// * Has a start address after the focused address
 						int sym_index = (int)(focused_symbol - ctx->symtab->symbols);
-						for (int i = sym_index + 1; i < ctx->symtab->num_symbols; ++i) {
+						for (uint32_t i = sym_index + 1; i < ctx->symtab->num_symbols; ++i) {
 							const buxn_dbg_sym_t* symbol = &ctx->symtab->symbols[i];
 							if (
 								symbol->region.filename == focused_symbol->region.filename
@@ -449,7 +449,7 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 					}
 
 					if (ref_sym) {
-						for (int i = 0; i < ctx->symtab->num_symbols; ++i) {
+						for (uint32_t i = 0; i < ctx->symtab->num_symbols; ++i) {
 							const buxn_dbg_sym_t* sym = &ctx->symtab->symbols[i];
 							if (
 								sym->type == BUXN_DBG_SYM_LABEL
@@ -665,7 +665,7 @@ bio_main(void* userdata) {
 
 				// Index all symbols to line
 				int num_lines = barray_len(src.lines);
-				for (int i = 0; i < symtab->num_symbols; ++i) {
+				for (uint32_t i = 0; i < symtab->num_symbols; ++i) {
 					const buxn_dbg_sym_t* symbol = &symtab->symbols[i];
 					int symbol_line = symbol->region.range.start.line;
 					if (
