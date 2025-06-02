@@ -2,6 +2,10 @@
 add_library(termbox2 INTERFACE)
 target_include_directories(termbox2 INTERFACE "termbox2")
 
+# utf8proc
+add_library(utf8proc STATIC "utf8proc/utf8proc.c")
+target_include_directories(utf8proc PUBLIC "utf8proc")
+
 # buxn
 add_library(buxn INTERFACE)
 target_include_directories(buxn INTERFACE "buxn/include")

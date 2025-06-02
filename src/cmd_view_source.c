@@ -5,6 +5,7 @@
 #include "tui.h"
 #include "symbol.h"
 #include "breakpoint.h"
+#include <utf8proc.h>
 #include <bio/mailbox.h>
 #include <bio/file.h>
 #include <bhash.h>
@@ -15,9 +16,16 @@ typedef struct {
 } args_t;
 
 typedef struct {
+	const char* str;
+	int str_len;
+	int print_offset;
+} highlight_info_t;
+
+typedef struct {
 	const char* content;
 	int len;
 	barray(const buxn_dbg_sym_t*) symbols;
+	barray(highlight_info_t) highlight_infos;
 } source_line_t;
 
 typedef struct {
@@ -153,13 +161,11 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 			// Semantic highlighting by drawing over the current line
 			for (int i = 0; i < (int)barray_len(source_line->symbols); ++i) {
 				const buxn_dbg_sym_t* symbol = source_line->symbols[i];
+				const highlight_info_t* highlight = &source_line->highlight_infos[i];
 				const buxn_asm_file_range_t* range = &symbol->region.range;
 				if (range->start.line > line) {
 					break;
 				}
-
-				const char* str = source.content + range->start.byte;
-				int str_len = range->end.byte - range->start.byte;
 
 				uintattr_t background = TB_DEFAULT;
 				uintattr_t foreground = TB_DEFAULT;
@@ -227,21 +233,21 @@ tui_entry(buxn_tui_mailbox_t mailbox, void* userdata) {
 					}
 				}
 
-				int x = range->start.col - 1;
+				int x = highlight->print_offset;
 				int y = range->start.line - top_line;
 				if (column_offset <= x) {
 					tb_printf(
 						x - column_offset, y,
 						foreground, background,
-						"%.*s", str_len, str
+						"%.*s", highlight->str_len, highlight->str
 					);
-				} else if (x + str_len >= column_offset) {
+				} else if (x + highlight->str_len >= column_offset) {
 					tb_printf(
 						0, y,
 						foreground, background,
 						"%.*s",
-						str_len - (column_offset - x),
-						str + (column_offset - x)
+						highlight->str_len - (column_offset - x),
+						highlight->str + (column_offset - x)
 					);
 				}
 			}
@@ -667,13 +673,42 @@ bio_main(void* userdata) {
 				int num_lines = barray_len(src.lines);
 				for (uint32_t i = 0; i < symtab->num_symbols; ++i) {
 					const buxn_dbg_sym_t* symbol = &symtab->symbols[i];
-					int symbol_line = symbol->region.range.start.line;
+					const buxn_asm_file_range_t* range = &symbol->region.range;
+					int symbol_line = range->start.line;
 					if (
 						symbol->region.filename == msg.load_source.name
 						&& symbol_line <= num_lines
 					) {
 						source_line_t* line = &src.lines[symbol_line - 1];
 						barray_push(line->symbols, symbol, NULL);
+
+						// Calculate print offset for the symbol
+						utf8proc_ssize_t byte_offset = 0;
+						utf8proc_ssize_t line_len = line->len;
+						int print_offset = 0;
+						while (true) {
+							utf8proc_int32_t codepoint;
+							utf8proc_ssize_t num_bytes = utf8proc_iterate(
+								(const utf8proc_uint8_t*)line->content + byte_offset,
+								line_len - byte_offset,
+								&codepoint
+							);
+
+							if (num_bytes < 0) { break; }
+							if (byte_offset + num_bytes >= range->start.col) { break; }
+
+							byte_offset += num_bytes;
+							if (byte_offset >= line_len) { break; }
+
+							print_offset += utf8proc_charwidth(codepoint);
+						}
+
+						highlight_info_t highlight_info = {
+							.print_offset = print_offset,
+							.str = src.content + range->start.byte,
+							.str_len = range->end.byte - range->start.byte,
+						};
+						barray_push(line->highlight_infos, highlight_info, NULL);
 					}
 				}
 
@@ -708,6 +743,7 @@ end:
 		source_t* source = &source_set.values[i];
 		for (int i = 0; i < (int)barray_len(source->lines); ++i) {
 			barray_free(NULL, source->lines[i].symbols);
+			barray_free(NULL, source->lines[i].highlight_infos);
 		}
 		barray_free(NULL, source->lines);
 		buxn_dbg_free(source->content);

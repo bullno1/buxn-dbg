@@ -30,6 +30,7 @@ target_link_libraries(
 	bio
 	blibs
 	termbox2
+	utf8proc
 	buxn-dbg-core
 	buxn-dbg-protocol
 	buxn-dbg-symtab
