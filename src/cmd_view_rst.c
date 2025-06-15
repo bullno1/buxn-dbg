@@ -313,6 +313,13 @@ bio_main(void* userdata) {
 	if (symtab == NULL) {
 		BIO_WARN("Return stack will not be annotated");
 	}
+	buxn_dbg_client_send_dbg_cmd(client, (buxn_dbg_cmd_t){
+		.type = BUXN_DBG_CMD_INFO,
+		.info = {
+			.type = BUXN_DBG_INFO_RST,
+			.stack = &ui_ctx.stack,
+		},
+	});
 
 	buxn_tui_t tui = buxn_tui_start(tui_entry, &ui_ctx);
 
