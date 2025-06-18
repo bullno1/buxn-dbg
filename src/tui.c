@@ -38,7 +38,7 @@ buxn_tui_start(buxn_tui_entrypoint_t entrypoint, void* userdata) {
 		.entrypoint = entrypoint,
 		.userdata = userdata,
 	};
-	bio_start_service(&tui, buxn_tui_wrapper, args, 4);
+	bio_start_service(&tui, buxn_tui_wrapper, args);
 	return tui;
 }
 

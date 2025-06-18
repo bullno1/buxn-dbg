@@ -115,7 +115,7 @@ end:
 buxn_dbg_client_handler_t
 buxn_dbg_start_client_handler(const buxn_dbg_client_args_t* args) {
 	buxn_dbg_client_handler_t handler;
-	bio_start_service(&handler, handler_entry, *args, 4);
+	bio_start_service(&handler, handler_entry, *args);
 	return handler;
 }
 

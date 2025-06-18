@@ -195,7 +195,7 @@ end:
 buxn_dbg_client_t
 buxn_dbg_start_client(const buxn_dbg_client_args_t* args) {
 	buxn_dbg_client_t client;
-	bio_start_service(&client, client_entry, *args, 4);
+	bio_start_service(&client, client_entry, *args);
 	return client;
 }
 

@@ -149,7 +149,7 @@ service_entry(void* userdata) {
 buxn_dbg_vm_handler_t
 buxn_dbg_start_vm_handler(const buxn_dbg_vm_handler_args_t* args) {
 	buxn_dbg_vm_handler_t handler;
-	bio_start_service(&handler, service_entry, *args, 4);
+	bio_start_service(&handler, service_entry, *args);
 	return handler;
 }
 
