@@ -3,12 +3,14 @@
 #include <bio/bio.h>
 #include <mem_layout.h>
 #include <bio/logging/file.h>
+#include <bio/mailbox.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <bmacro.h>
 #include "bflag.h"
 
 typedef struct {
@@ -18,6 +20,10 @@ typedef struct {
 } bio_entry_data_t;
 
 static bio_logger_t buxn_main_logger = { 0 };
+
+static bool buxn_buffer_flusher_started = false;
+
+static BIO_MAILBOX(bserial_buffer_io_t*) buxn_buffer_flush_mailbox = { 0 };
 
 bool
 buxn_dbg_parse_transport(const char* str, buxn_dbg_transport_info_t* info) {
@@ -215,60 +221,104 @@ buxn_dbg_set_logger(bio_logger_t logger) {
 }
 
 static size_t
-bio_file_read(struct bserial_in_s* in, void* buf, size_t size) {
-	bserial_file_io_t* io = BUXN_CONTAINER_OF(in, bserial_file_io_t, in);
-	return bio_fread(io->file, buf, size, NULL);
-}
-
-static bool
-bio_file_skip(struct bserial_in_s* in, size_t size) {
-	bserial_file_io_t* io = BUXN_CONTAINER_OF(in, bserial_file_io_t, in);
-	return bio_fseek(io->file, (int64_t)size, SEEK_CUR, NULL);
-}
-
-static size_t
-bio_file_write(struct bserial_out_s* out, const void* buf, size_t size) {
-	bserial_file_io_t* io = BUXN_CONTAINER_OF(out, bserial_file_io_t, out);
-	return bio_fwrite(io->file, buf, size, NULL);
-}
-
-// TODO: Consider buffering for these
-void
-bserial_file_io_init(bserial_file_io_t* io, bio_file_t file) {
-	io->in.read = bio_file_read;
-	io->in.skip = bio_file_skip;
-	io->out.write = bio_file_write;
-	io->file = file;
-}
-
-static size_t
-bio_socket_read(struct bserial_in_s* in, void* buf, size_t size) {
-	bserial_socket_io_t* io = BUXN_CONTAINER_OF(in, bserial_socket_io_t, in);
+bserial_buffered_read(struct bserial_in_s* in, void* buf, size_t size) {
+	bserial_buffer_io_t* io = BCONTAINER_OF(in, bserial_buffer_io_t, in);
 	bio_error_t error = { 0 };
-	size_t result = bio_net_recv(io->socket, buf, size, &error);
+	size_t result = bio_buffered_read(io->in_buf, buf, size, &error);
 	if (bio_has_error(&error)) {
-		BIO_ERROR(BIO_ERROR_FMT, BIO_ERROR_FMT_ARGS(&error));
+		BIO_ERROR("Error while reading: " BIO_ERROR_FMT, BIO_ERROR_FMT_ARGS(&error));
 	}
 	return result;
 }
 
-static size_t
-bio_socket_write(struct bserial_out_s* out, const void* buf, size_t size) {
-	bserial_socket_io_t* io = BUXN_CONTAINER_OF(out, bserial_socket_io_t, out);
-	bio_error_t error = { 0 };
-	size_t result = bio_net_send(io->socket, buf, size, &error);
-	if (bio_has_error(&error)) {
-		BIO_ERROR(BIO_ERROR_FMT, BIO_ERROR_FMT_ARGS(&error));
+static void
+buxn_lock_buffer_io(bserial_buffer_io_t* io) {
+	while (io->out_buf_locked) {
+		bio_yield();
 	}
+	io->out_buf_locked = true;
+}
+
+static void
+buxn_unlock_buffer_io(bserial_buffer_io_t* io) {
+	io->out_buf_locked = false;
+}
+
+static void
+buxn_buffer_flusher_exit(void* userdata) {
+	bio_wait_for_exit();
+	bserial_buffer_io_t* terminate = NULL;
+	bio_send_message(buxn_buffer_flush_mailbox, terminate);
+}
+
+static void
+buxn_buffer_flusher(void* userdata) {
+	// Spawn a coroutine that will message this to exit
+	bio_spawn_ex(buxn_buffer_flusher_exit, NULL, &(bio_coro_options_t){ .daemon = true });
+
+	bio_foreach_message(io, buxn_buffer_flush_mailbox) {
+		if(io == NULL) { break; }
+		bio_error_t error = { 0 };
+
+		buxn_lock_buffer_io(io);
+		io->sent_to_flush = false;
+		if (!bio_flush_buffer(io->out_buf, &error)) {
+			BIO_ERROR("Error while flushing: " BIO_ERROR_FMT, BIO_ERROR_FMT_ARGS(&error));
+		}
+		buxn_unlock_buffer_io(io);
+		bio_raise_signal(io->flush_wait_signal);
+	}
+	bio_close_mailbox(buxn_buffer_flush_mailbox);
+}
+
+static size_t
+bserial_buffered_write(struct bserial_out_s* out, const void* buf, size_t size) {
+	bserial_buffer_io_t* io = BCONTAINER_OF(out, bserial_buffer_io_t, out);
+	bio_error_t error = { 0 };
+	buxn_lock_buffer_io(io);
+	size_t result = bio_buffered_write(io->out_buf, buf, size, &error);
+	buxn_unlock_buffer_io(io);
+	if (bio_has_error(&error)) {
+		BIO_ERROR("Error while writing: " BIO_ERROR_FMT, BIO_ERROR_FMT_ARGS(&error));
+		return 0;
+	}
+
+	if (!io->sent_to_flush) {
+		if (!buxn_buffer_flusher_started) {
+			bio_open_mailbox(&buxn_buffer_flush_mailbox, 8);
+			buxn_buffer_flusher_started = true;
+			bio_spawn_ex(buxn_buffer_flusher, NULL, &(bio_coro_options_t){
+				.daemon = true,
+			});
+		}
+
+		io->sent_to_flush = true;
+		bio_send_message(buxn_buffer_flush_mailbox, io);
+	}
+
 	return result;
 }
 
 void
-bserial_socket_io_init(bserial_socket_io_t* io, bio_socket_t socket) {
-	io->in.read = bio_socket_read;
-	io->in.skip = NULL;
-	io->out.write = bio_socket_write;
-	io->socket = socket;
+bserial_buffer_io_init(
+	bserial_buffer_io_t* io,
+	bio_io_buffer_t in_buf,
+	bio_io_buffer_t out_buf
+) {
+	*io = (bserial_buffer_io_t){
+		.in_buf = in_buf,
+		.in.read = bserial_buffered_read,
+		.out_buf = out_buf,
+		.out.write = bserial_buffered_write,
+	};
+}
+
+void
+bserial_buffer_io_cleanup(bserial_buffer_io_t* io) {
+	if (io->sent_to_flush) {
+		io->flush_wait_signal = bio_make_signal();
+		bio_wait_for_one_signal(io->flush_wait_signal);
+	}
 }
 
 bserial_io_t*
@@ -284,25 +334,29 @@ buxn_dbg_make_bserial_io_from_socket(bio_socket_t socket) {
 	// Allocate everything in one block
 	mem_layout_t layout = { 0 };
 	mem_layout_reserve(&layout, sizeof(bserial_io_t), _Alignof(bserial_io_t));
-	ptrdiff_t socket_io_offset = mem_layout_reserve(&layout, sizeof(bserial_socket_io_t), _Alignof(bserial_socket_io_t));
+	ptrdiff_t buffer_io_offset = mem_layout_reserve(&layout, sizeof(bserial_buffer_io_t), _Alignof(bserial_buffer_io_t));
 	ptrdiff_t mem_in_offset = mem_layout_reserve(&layout, bserial_mem_size, _Alignof(max_align_t));
 	ptrdiff_t mem_out_offset = mem_layout_reserve(&layout, bserial_mem_size, _Alignof(max_align_t));
 	size_t total_size = mem_layout_size(&layout);
 	void* mem = buxn_dbg_malloc(total_size);
 	bserial_io_t* bserial_io = mem;
-	bserial_socket_io_t* socket_io = mem_layout_locate(mem, socket_io_offset);
-	bserial_socket_io_init(socket_io, socket);
+	bserial_io->buffer = mem_layout_locate(mem, buffer_io_offset);
+	bserial_buffer_io_init(
+		bserial_io->buffer,
+		bio_make_socket_read_buffer(socket, BUXN_PROTOCOL_BUF_SIZE),
+		bio_make_socket_write_buffer(socket, BUXN_PROTOCOL_BUF_SIZE)
+	);
 	bserial_io->in = bserial_make_ctx(
 		mem_layout_locate(mem, mem_in_offset),
 		bserial_cfg,
-		&socket_io->in,
+		&bserial_io->buffer->in,
 		NULL
 	);
 	bserial_io->out = bserial_make_ctx(
 		mem_layout_locate(mem, mem_out_offset),
 		bserial_cfg,
 		NULL,
-		&socket_io->out
+		&bserial_io->buffer->out
 	);
 
 	return bserial_io;
@@ -310,6 +364,9 @@ buxn_dbg_make_bserial_io_from_socket(bio_socket_t socket) {
 
 void
 buxn_dbg_destroy_bserial_io(bserial_io_t* io) {
+	bserial_buffer_io_cleanup(io->buffer);
+	bio_destroy_buffer(io->buffer->in_buf);
+	bio_destroy_buffer(io->buffer->out_buf);
 	buxn_dbg_free(io);
 }
 

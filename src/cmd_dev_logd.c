@@ -13,8 +13,12 @@ client_entry(void* userdata) {
 	client_ctx_t ctx = *(client_ctx_t*)userdata;
 	bio_raise_signal(ctx.ready_sig);
 
-	bserial_socket_io_t io;
-	bserial_socket_io_init(&io, ctx.sock);
+	bserial_buffer_io_t io;
+	bserial_buffer_io_init(
+		&io,
+		bio_make_socket_read_buffer(ctx.sock, BUXN_PROTOCOL_BUF_SIZE),
+		(bio_io_buffer_t){ 0 }
+	);
 	void* bserial_mem = buxn_dbg_malloc(bserial_ctx_mem_size(buxn_log_bserial_config));
 	bserial_ctx_t* bserial_in = bserial_make_ctx(bserial_mem, buxn_log_bserial_config, &io.in, NULL);
 
@@ -51,6 +55,8 @@ client_entry(void* userdata) {
 		}
 	}
 
+	bserial_buffer_io_cleanup(&io);
+	bio_destroy_buffer(io.in_buf);
 	buxn_dbg_free(bserial_mem);
 	bio_net_close(ctx.sock, NULL);
 }

@@ -1,6 +1,9 @@
 #include "symbol.h"
 #include "common.h"
 #include <bio/file.h>
+#include <bio/buffering.h>
+
+#define BUXN_SYMBOL_READ_BUF_SIZE 16384
 
 buxn_dbg_symtab_t*
 buxn_dbg_load_symbols(const char* path) {
@@ -14,8 +17,9 @@ buxn_dbg_load_symbols(const char* path) {
 
 	buxn_dbg_symtab_t* symtab = NULL;
 
-	bserial_file_io_t io;
-	bserial_file_io_init(&io, dbg_file);
+	bio_io_buffer_t in_buf = bio_make_file_read_buffer(dbg_file, BUXN_SYMBOL_READ_BUF_SIZE);
+	bserial_buffer_io_t io;
+	bserial_buffer_io_init(&io, in_buf, (bio_io_buffer_t){ 0 });
 	buxn_dbg_symtab_reader_opts_t reader_opts = { .input = &io.in };
 	buxn_dbg_symtab_reader_t* reader = buxn_dbg_make_symtab_reader(
 		buxn_dbg_malloc(buxn_dbg_symtab_reader_mem_size(&reader_opts)),
@@ -37,6 +41,8 @@ end:
 	}
 
 	buxn_dbg_free(reader);
+	bserial_buffer_io_cleanup(&io);
+	bio_destroy_buffer(in_buf);
 	bio_fclose(dbg_file, NULL);
 
 	return symtab;

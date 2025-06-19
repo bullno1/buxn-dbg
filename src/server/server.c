@@ -407,17 +407,24 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 
 	bserial_ctx_t* vm_bserial_in = NULL;
 	bserial_ctx_t* vm_bserial_out = NULL;
-	bserial_file_io_t file_io = { 0 };
-	bserial_socket_io_t socket_io = { 0 };
+	bserial_buffer_io_t vm_io;
 
 	if (args->connect_transport.type == BUXN_DBG_TRANSPORT_FILE) {
-		bserial_file_io_init(&file_io, vm_conn_file);
-		vm_bserial_in = bserial_make_ctx(bserial_mem_in, bserial_cfg, &file_io.in, NULL);
-		vm_bserial_out = bserial_make_ctx(bserial_mem_out, bserial_cfg, NULL, &file_io.out);
+		bserial_buffer_io_init(
+			&vm_io,
+			bio_make_file_read_buffer(vm_conn_file, BUXN_PROTOCOL_BUF_SIZE),
+			bio_make_file_write_buffer(vm_conn_file, BUXN_PROTOCOL_BUF_SIZE, false)
+		);
+		vm_bserial_in = bserial_make_ctx(bserial_mem_in, bserial_cfg, &vm_io.in, NULL);
+		vm_bserial_out = bserial_make_ctx(bserial_mem_out, bserial_cfg, NULL, &vm_io.out);
 	} else {
-		bserial_socket_io_init(&socket_io, vm_conn_socket);
-		vm_bserial_in = bserial_make_ctx(bserial_mem_in, bserial_cfg, &socket_io.in, NULL);
-		vm_bserial_out = bserial_make_ctx(bserial_mem_out, bserial_cfg, NULL, &socket_io.out);
+		bserial_buffer_io_init(
+			&vm_io,
+			bio_make_socket_read_buffer(vm_conn_socket, BUXN_PROTOCOL_BUF_SIZE),
+			bio_make_socket_write_buffer(vm_conn_socket, BUXN_PROTOCOL_BUF_SIZE)
+		);
+		vm_bserial_in = bserial_make_ctx(bserial_mem_in, bserial_cfg, &vm_io.in, NULL);
+		vm_bserial_out = bserial_make_ctx(bserial_mem_out, bserial_cfg, NULL, &vm_io.out);
 	}
 
 	// Server states
@@ -622,6 +629,9 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 	buxn_dbg_free(clients);
 	buxn_dbg_free(bserial_mem_out);
 	buxn_dbg_free(bserial_mem_in);
+	bserial_buffer_io_cleanup(&vm_io);
+	bio_destroy_buffer(vm_io.in_buf);
+	bio_destroy_buffer(vm_io.out_buf);
 
 #ifdef __linux__
 	free((char*)config.dbg_filename);

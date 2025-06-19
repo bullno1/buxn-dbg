@@ -2,13 +2,12 @@
 #define BUXN_DBG_COMMON_H
 
 #include <bio/net.h>
-#include <bio/file.h>
+#include <bio/buffering.h>
 #include <bserial.h>
 #include "barg.h"
 #include "btmp_buf.h"
 
-#define BUXN_CONTAINER_OF(ptr, type, member) \
-	((type *)((char *)(1 ? (ptr) : &((type *)0)->member) - offsetof(type, member)))
+#define BUXN_PROTOCOL_BUF_SIZE 16384
 
 #define CONNECT_TRANSPORT_OPT_DESC \
 	"Default value: abstract-connect:buxn/dbg\n" \
@@ -50,18 +49,17 @@ typedef struct buxn_dbg_transport_info_s {
 typedef struct {
 	bserial_in_t in;
 	bserial_out_t out;
-	bio_file_t file;
-} bserial_file_io_t;
-
-typedef struct {
-	bserial_in_t in;
-	bserial_out_t out;
-	bio_socket_t socket;
-} bserial_socket_io_t;
+	bio_io_buffer_t in_buf;
+	bio_io_buffer_t out_buf;
+	bool sent_to_flush;
+	bool out_buf_locked;
+	bio_signal_t flush_wait_signal;
+} bserial_buffer_io_t;
 
 typedef struct {
 	bserial_ctx_t* in;
 	bserial_ctx_t* out;
+	bserial_buffer_io_t* buffer;
 } bserial_io_t;
 
 void*
@@ -83,10 +81,14 @@ void
 buxn_dbg_set_logger(bio_logger_t logger);
 
 void
-bserial_file_io_init(bserial_file_io_t* io, bio_file_t file);
+bserial_buffer_io_init(
+	bserial_buffer_io_t* io,
+	bio_io_buffer_t in_buf,
+	bio_io_buffer_t out_buf
+);
 
 void
-bserial_socket_io_init(bserial_socket_io_t* io, bio_socket_t socket);
+bserial_buffer_io_cleanup(bserial_buffer_io_t* io);
 
 bserial_status_t
 bserial_str(bserial_ctx_t* ctx, const char** str_ptr, btmp_buf_t* tmp_buf);

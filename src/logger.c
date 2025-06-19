@@ -1,6 +1,7 @@
 #include "logger.h"
 #include "common.h"
 #include <bio/net.h>
+#include <bmacro.h>
 #include <assert.h>
 #include <string.h>
 
@@ -15,7 +16,7 @@ typedef struct {
 
 static size_t
 buxn_bserial_write_msg_buf(struct bserial_out_s* out, const void* buf, size_t size) {
-	buxn_dbg_logger_data_t* impl = BUXN_CONTAINER_OF(out, buxn_dbg_logger_data_t, bserial_out);
+	buxn_dbg_logger_data_t* impl = BCONTAINER_OF(out, buxn_dbg_logger_data_t, bserial_out);
 	if (impl->msg_size + size > sizeof(impl->msg_buf)) {
 		return 0;
 	}
