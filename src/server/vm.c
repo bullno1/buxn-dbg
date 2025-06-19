@@ -27,7 +27,7 @@ typedef struct {
 } reader_ctx_t;
 
 static void
-terminate_wait_points(const wait_points_t* wait_points) {
+terminate_wait_points(wait_points_t wait_points) {
 	// The problem with this service this that the service loop alternates between
 	// several wait points:
 	//
@@ -38,10 +38,10 @@ terminate_wait_points(const wait_points_t* wait_points) {
 	// There is not a single point to signal termination.
 	// They are all put into this single struct and function to make termination
 	// easier.
-	bio_fclose(wait_points->vm_conn_file, NULL);
-	bio_net_close(wait_points->vm_conn_socket, NULL);
-	bio_close_mailbox(wait_points->cmd_mailbox);
-	bio_close_mailbox(wait_points->service_mailbox);
+	bio_fclose(wait_points.vm_conn_file, NULL);
+	bio_net_close(wait_points.vm_conn_socket, NULL);
+	bio_close_mailbox(wait_points.cmd_mailbox);
+	bio_close_mailbox(wait_points.service_mailbox);
 }
 
 static void
@@ -83,7 +83,7 @@ reader_entry(void* userdata) {
 		}
 	}
 
-	terminate_wait_points(ctx->wait_points);
+	terminate_wait_points(*ctx->wait_points);
 	BIO_DEBUG("VM reader terminated");
 }
 
@@ -138,7 +138,7 @@ service_entry(void* userdata) {
 		bio_respond(msg) { }
 	}
 
-	terminate_wait_points(&wait_points);
+	terminate_wait_points(wait_points);
 	reader_ctx.should_terminate = true;
 	bio_join(reader_coro);
 
@@ -157,7 +157,7 @@ void
 buxn_dbg_stop_vm_handler(buxn_dbg_vm_handler_t vm) {
 	wait_points_t* wait_points = bio_get_coro_data(vm.coro, &BUXN_VM_DATA);
 	if (wait_points != NULL) {
-		terminate_wait_points(wait_points);
+		terminate_wait_points(*wait_points);
 		bio_stop_service(vm);
 	}
 }

@@ -119,6 +119,7 @@ reader_entry(void* userdata) {
 		ctx->service_mailbox,
 		term_msg
 	);
+	BIO_INFO("Terminated");
 }
 
 static void

@@ -92,6 +92,11 @@ typedef struct {
 	bool should_terminate;
 } acceptor_ctx_t;
 
+typedef struct {
+	server_mailbox_t server_mailbox;
+	bool should_run;
+} exit_ctx_t;
+
 static void
 acceptor(void* userdata) {
 	bio_set_coro_name("server/acceptor");
@@ -113,6 +118,14 @@ acceptor(void* userdata) {
 	if (!ctx->should_terminate) {
 		BIO_ERROR("Error in acceptor: " BIO_ERROR_FMT, BIO_ERROR_FMT_ARGS(&error));
 	}
+}
+
+static void
+exit_handler(void* userdata) {
+	exit_ctx_t* exit_ctx = userdata;
+	bio_wait_for_exit();
+	exit_ctx->should_run = false;
+	bio_close_mailbox(exit_ctx->server_mailbox);
 }
 
 static void
@@ -479,7 +492,7 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 		},
 	};
 	if (should_run) {
-		client_shared_ctx.vm = buxn_dbg_start_vm_handler(&(buxn_dbg_vm_handler_args_t){
+		vm = client_shared_ctx.vm = buxn_dbg_start_vm_handler(&(buxn_dbg_vm_handler_args_t){
 			.dbg_in = vm_bserial_in,
 			.dbg_out = vm_bserial_out,
 			.controller = &vm_controller,
@@ -489,10 +502,20 @@ buxn_dbg_server_entry(/* buxn_dbg_server_args_t* */ void* userdata) {
 		client_shared_ctx.vm_controller = &vm_controller;
 	}
 
-	while (should_run) {
+	exit_ctx_t exit_ctx = {
+		.server_mailbox = mailbox,
+		.should_run = should_run,
+	};
+	if (should_run) {
+		bio_spawn(exit_handler, &exit_ctx);
+	}
+
+	while (exit_ctx.should_run) {
 		server_msg_t msg;
 		if (!bio_recv_message(mailbox, &msg)) {
-			BIO_ERROR("Could not receive message");
+			if (exit_ctx.should_run) {
+				BIO_ERROR("Could not receive message");
+			}
 			break;
 		}
 

@@ -253,6 +253,8 @@ buxn_buffer_flusher_exit(void* userdata) {
 
 static void
 buxn_buffer_flusher(void* userdata) {
+	bio_set_coro_name("buffer flusher");
+	BIO_DEBUG("Buffer flusher started");
 	// Spawn a coroutine that will message this to exit
 	bio_spawn_ex(buxn_buffer_flusher_exit, NULL, &(bio_coro_options_t){ .daemon = true });
 
@@ -269,6 +271,7 @@ buxn_buffer_flusher(void* userdata) {
 		bio_raise_signal(io->flush_wait_signal);
 	}
 	bio_close_mailbox(buxn_buffer_flush_mailbox);
+	BIO_DEBUG("Buffer flusher stopped");
 }
 
 static size_t
