@@ -1,5 +1,8 @@
 # buxn-dbg
 
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Build status](https://github.com/bullno1/buxn-dbg/actions/workflows/build.yml/badge.svg)](https://github.com/bullno1/buxn-dbg/actions/workflows/build.yml)
+
 A TUI step debugger for [uxntal](https://wiki.xxiivv.com/site/uxntal.html).
 
 ![screenshot](./screenshot.png)
